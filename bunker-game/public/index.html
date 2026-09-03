@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Игра «Бункер» — Постапокалипсис</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-gray-900 text-gray-100 h-full flex flex-col font-sans select-none overflow-hidden">
+
+  <!-- JOIN MODAL -->
+  <div id="join-modal" class="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-800 border border-amber-600 rounded-xl p-6 max-w-md w-full shadow-2xl text-center space-y-5">
+      <div class="text-4xl">☢️</div>
+      <h1 class="text-3xl font-extrabold text-amber-500 tracking-wider">БУНКЕР</h1>
+      <p class="text-gray-400 text-sm">Введите ваш никнейм для входа в выживание</p>
+      <input type="text" id="player-name-input" placeholder="Ваше имя..." class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500 text-center text-lg text-white">
+      <button id="join-btn" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-black font-bold text-lg rounded-lg transition duration-200 shadow-lg">ВОЙТИ В ИГРУ</button>
+    </div>
+  </div>
+
+  <!-- ACTION TARGET SELECTION MODAL -->
+  <div id="action-modal" class="hidden fixed inset-0 bg-black bg-opacity-80 z-40 flex items-center justify-center p-4">
+    <div class="bg-gray-800 border border-amber-500 rounded-xl p-6 max-w-md w-full text-center space-y-4">
+      <h3 id="action-modal-title" class="text-xl font-bold text-amber-400">Выберите цель применения</h3>
+      <div id="action-target-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+      <button id="action-modal-cancel" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300 font-semibold">Отмена</button>
+    </div>
+  </div>
+
+  <!-- PRIVATE MESSAGE MODAL -->
+  <div id="private-modal" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-800 border border-yellow-500 rounded-xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+      <h3 id="private-modal-title" class="text-xl font-bold text-yellow-400">🕵️ Секретная информация</h3>
+      <p id="private-modal-body" class="text-gray-200 text-base leading-relaxed bg-gray-900 p-4 rounded-lg border border-gray-700"></p>
+      <button id="private-modal-close" class="w-full py-2 bg-amber-600 hover:bg-amber-500 font-bold rounded-lg text-black">ПОНЯТНО</button>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header class="bg-gray-950 border-b border-gray-800 px-4 py-2 flex items-center justify-between shrink-0 h-14">
+    <div class="flex items-center space-x-3">
+      <span class="text-2xl">☢️</span>
+      <h1 class="text-lg font-bold text-amber-500 tracking-widest hidden sm:inline">БУНКЕР</h1>
+      <span id="phase-badge" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-800 text-gray-300 border border-gray-700">ОЖИДАНИЕ</span>
+    </div>
+    <div class="flex items-center space-x-4">
+      <div id="timer-box" class="hidden text-amber-400 font-mono font-bold text-lg bg-gray-900 border border-amber-900/50 px-3 py-1 rounded-lg">⏱️ <span id="timer-text">03:00</span></div>
+      <button id="host-start-btn" class="hidden px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-lg shadow transition">НАЧАТЬ ИГРУ</button>
+      <button id="host-next-btn" class="hidden px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-black font-bold text-sm rounded-lg shadow transition">СЛЕД. ФАЗА</button>
+    </div>
+  </header>
+
+  <!-- MAIN DASHBOARD (100vh setup) -->
+  <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+    <!-- DESKTOP & MOBILE CONTENT SECTIONS -->
+    <!-- SECTION 1: MY CARDS -->
+    <section id="tab-my-cards" class="tab-content active-tab flex-1 flex flex-col p-3 border-r border-gray-800 overflow-y-auto">
+      <h2 class="text-md font-bold text-amber-500 mb-2 flex items-center justify-between shrink-0">
+        <span>🃏 Мои характеристики</span>
+        <span id="my-status-tag" class="text-xs text-gray-400 font-normal">Ваши карты зашифрованы</span>
+      </h2>
+      <div id="my-cards-grid" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+        <!-- Cards rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- SECTION 2: BUNKER & DISASTER -->
+    <section id="tab-bunker" class="tab-content hidden md:flex w-full md:w-80 flex-col p-3 border-r border-gray-800 shrink-0 space-y-3 overflow-y-auto bg-gray-900/50">
+      <div>
+        <h3 class="text-sm font-bold text-red-500 mb-1 tracking-wide">💥 КАТАСТРОФА</h3>
+        <div id="disaster-card" class="bg-gray-800/80 border border-red-900/50 p-3 rounded-lg text-xs space-y-1">
+          <p class="font-bold text-red-400 text-sm" id="disaster-title">Ожидание старта...</p>
+          <p class="text-gray-300 leading-relaxed" id="disaster-desc">Катастрофа еще не определена.</p>
+        </div>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-emerald-500 mb-1 tracking-wide">🛡️ СОСТОЯНИЕ БУНКЕРА</h3>
+        <div id="bunker-card" class="bg-gray-800/80 border border-emerald-900/50 p-3 rounded-lg text-xs space-y-2">
+          <p class="font-bold text-emerald-400 text-sm" id="bunker-title">Убежище не выбрано</p>
+          <p class="text-gray-300 leading-relaxed" id="bunker-desc">Параметры бункера будут раскрыты после запуска.</p>
+          <div class="pt-2 border-t border-gray-700 flex justify-between text-gray-400">
+            <span>Спасительных мест:</span>
+            <span id="bunker-capacity" class="font-bold text-amber-400">0</span>
+          </div>
+        </div>
+      </div>
+      <!-- LOGS PANEL -->
+      <div class="flex-1 flex flex-col min-h-[140px]">
+        <h3 class="text-sm font-bold text-gray-400 mb-1">📜 Лог событий</h3>
+        <div id="game-logs" class="flex-1 bg-gray-950 border border-gray-800 rounded-lg p-2 text-[11px] font-mono text-gray-300 overflow-y-auto space-y-1"></div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: PLAYERS -->
+    <section id="tab-players" class="tab-content hidden md:flex w-full md:w-80 flex-col p-3 shrink-0 overflow-y-auto">
+      <h2 class="text-md font-bold text-amber-500 mb-2 flex items-center justify-between shrink-0">
+        <span>👥 Выжившие</span>
+        <span id="players-count" class="text-xs text-gray-400">0 человек</span>
+      </h2>
+      <div id="players-list" class="space-y-2 overflow-y-auto flex-1"></div>
+    </section>
+
+  </main>
+
+  <!-- MOBILE BOTTOM NAVIGATION -->
+  <nav class="md:hidden bg-gray-950 border-t border-gray-800 flex justify-around p-2 shrink-0 h-14">
+    <button data-tab="tab-my-cards" class="mobile-nav-btn active flex-1 flex flex-col items-center justify-center text-amber-500">
+      <span class="text-lg">🃏</span>
+      <span class="text-[10px] font-medium">Мои карты</span>
+    </button>
+    <button data-tab="tab-bunker" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center text-gray-400">
+      <span class="text-lg">🛡️</span>
+      <span class="text-[10px] font-medium">Бункер</span>
+    </button>
+    <button data-tab="tab-players" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center text-gray-400">
+      <span class="text-lg">👥</span>
+      <span class="text-[10px] font-medium">Игроки</span>
+    </button>
+  </nav>
+
+  <script src="/js/ui.js"></script>
+  <script src="/js/socket-handler.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

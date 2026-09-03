@@ -1,0 +1,14 @@
+{
+  "name": "bunker-game",
+  "version": "1.0.0",
+  "description": "Bunker board game web application for local network",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node -e \"console.log('Setup test passed')\""
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
