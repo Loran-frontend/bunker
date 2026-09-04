@@ -7,7 +7,12 @@ const GameState = require('./src/logic/GameState');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -82,11 +87,15 @@ const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 const LOCAL_IP = getLocalIp();
 
-server.listen(PORT, HOST, () => {
-  console.log('====================================================');
-  console.log('   🔥 ПОСТАПОКАЛИПТИЧЕСКАЯ ВЕБ-ИГРА «БУНКЕР» 🔥     ');
-  console.log('====================================================');
-  console.log(` Сервер запущен на хосте: ${HOST}:${PORT}`);
-  console.log(` 🌐 Игра доступна по адресу: http://${LOCAL_IP}:${PORT}`);
-  console.log('====================================================');
-});
+if (require.main === module) {
+  server.listen(PORT, HOST, () => {
+    console.log('====================================================');
+    console.log('   🔥 ПОСТАПОКАЛИПТИЧЕСКАЯ ВЕБ-ИГРА «БУНКЕР» 🔥     ');
+    console.log('====================================================');
+    console.log(` Сервер запущен на хосте: ${HOST}:${PORT}`);
+    console.log(` 🌐 Игра доступна по адресу: http://${LOCAL_IP}:${PORT}`);
+    console.log('====================================================');
+  });
+}
+
+module.exports = app;

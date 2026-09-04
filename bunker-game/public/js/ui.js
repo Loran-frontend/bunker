@@ -47,14 +47,12 @@ const UI = {
   updateGameState(state) {
     this.currentState = state;
 
-    // Phase badge
     const badge = document.getElementById('phase-badge');
-    if (state.status === 'LOBBY') badge.innerText = 'Лобби';
+    if (state.status === 'LOBBY') badge.innerText = `Лобби (${state.players.length}/16)`;
     else if (state.status === 'GAME') badge.innerText = `Раунд ${state.round}: Дискуссия`;
     else if (state.status === 'VOTING') badge.innerText = `Раунд ${state.round}: Голосование`;
     else if (state.status === 'GAME_OVER') badge.innerText = 'Игра Завершена';
 
-    // Host controls
     const isHost = socket.id === state.hostId;
     const startBtn = document.getElementById('host-start-btn');
     const nextBtn = document.getElementById('host-next-btn');
@@ -71,7 +69,6 @@ const UI = {
       nextBtn.classList.add('hidden');
     }
 
-    // Timer box
     const timerBox = document.getElementById('timer-box');
     if (state.status !== 'LOBBY' && state.status !== 'GAME_OVER') {
       timerBox.classList.remove('hidden');
@@ -79,7 +76,6 @@ const UI = {
       timerBox.classList.add('hidden');
     }
 
-    // Render Disaster & Bunker
     if (state.disaster) {
       document.getElementById('disaster-title').innerText = state.disaster.title;
       document.getElementById('disaster-desc').innerText = state.disaster.desc;
@@ -90,14 +86,9 @@ const UI = {
       document.getElementById('bunker-capacity').innerText = `${state.bunkerCapacity} чел.`;
     }
 
-    // Render My Cards
     const me = state.players.find(p => p.id === socket.id);
     this.renderMyCards(me);
-
-    // Render Players
     this.renderPlayersList(state.players, me);
-
-    // Render Logs
     this.renderLogs(state.logs);
   },
 
@@ -146,17 +137,34 @@ const UI = {
 
   handleSpecialCardClick(cat) {
     this.selectedCategoryForAction = cat;
+    const me = this.currentState.players.find(p => p.id === socket.id);
+    if (!me || !me.cards || !me.cards[cat]) return;
+
+    const action = me.cards[cat].details ? me.cards[cat].details.action : null;
+
+    // Self-only / Non-targeted abilities execute directly on self
+    if (action === 'double_vote' || action === 'immunity') {
+      SocketHandler.useCardAction(cat, socket.id);
+      return;
+    }
+
+    // Targeted abilities MUST select ANOTHER player (self excluded!)
     const modal = document.getElementById('action-modal');
     const targetList = document.getElementById('action-target-list');
     targetList.innerHTML = '';
 
-    const me = this.currentState.players.find(p => p.id === socket.id);
-    const alivePlayers = this.currentState.players.filter(p => !p.eliminated);
+    // Filter out self so player CANNOT target themselves
+    const otherAlivePlayers = this.currentState.players.filter(p => !p.eliminated && p.id !== socket.id);
 
-    alivePlayers.forEach(p => {
+    if (otherAlivePlayers.length === 0) {
+      alert('Нет других доступных игроков для применения способности!');
+      return;
+    }
+
+    otherAlivePlayers.forEach(p => {
       const btn = document.createElement('button');
       btn.className = 'w-full py-2 bg-gray-700 hover:bg-amber-600 hover:text-black rounded text-sm text-gray-200 font-medium transition';
-      btn.innerText = p.id === socket.id ? `${p.name} (Вы)` : p.name;
+      btn.innerText = p.name;
       btn.onclick = () => {
         SocketHandler.useCardAction(cat, p.id);
         modal.classList.add('hidden');

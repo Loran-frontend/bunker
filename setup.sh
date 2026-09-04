@@ -11,7 +11,7 @@ cat << 'EOF' > bunker-game/package.json
 {
   "name": "bunker-game",
   "version": "1.0.0",
-  "description": "Bunker board game web application for local network",
+  "description": "Bunker board game web application for online / local network",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -21,6 +21,24 @@ cat << 'EOF' > bunker-game/package.json
     "express": "^4.19.2",
     "socket.io": "^4.7.5"
   }
+}
+EOF
+
+cat << 'EOF' > bunker-game/vercel.json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
+  ]
 }
 EOF
 
@@ -978,7 +996,6 @@ class CardGenerator {
 
   getRandomItem(category) {
     if (!this.pools[category] || this.pools[category].length === 0) {
-      // Refill if empty
       this.pools[category] = [...cardsData[category]];
     }
     const idx = Math.floor(Math.random() * this.pools[category].length);
@@ -1042,6 +1059,10 @@ class GameState {
       return { success: false, message: 'Игра уже началась' };
     }
 
+    if (this.players.size >= 16) {
+      return { success: false, message: 'Комната заполнена (максимум 16 игроков)!' };
+    }
+
     const player = {
       id: socketId,
       name: name.trim() || `Игрок_${socketId.substring(0, 4)}`,
@@ -1055,7 +1076,7 @@ class GameState {
     }
 
     this.players.set(socketId, player);
-    this.addLog(`Игрок ${player.name} присоединился к игре.`);
+    this.addLog(`Игрок ${player.name} присоединился к игре. (${this.players.size}/16)`);
     return { success: true, player };
   }
 
@@ -1091,8 +1112,8 @@ class GameState {
   }
 
   startGame() {
-    if (this.players.size < 2) {
-      return { success: false, message: 'Для начала игры нужно минимум 2 игрока' };
+    if (this.players.size < 6) {
+      return { success: false, message: 'Для начала игры необходимо минимум 6 игроков (сейчас: ' + this.players.size + ')!' };
     }
 
     this.cardGenerator.reset();
@@ -1111,7 +1132,7 @@ class GameState {
 
     this.status = 'GAME';
     this.round = 1;
-    this.addLog(`Игра началась! Катастрофа: "${this.disaster.title}". Мест в бункере: ${this.bunkerCapacity}.`);
+    this.addLog(`Игра началась! Участников: ${totalPlayers}. Мест в бункере: ${this.bunkerCapacity}. Катастрофа: "${this.disaster.title}".`);
 
     this.startDiscussionTimer();
     return { success: true };
@@ -1120,7 +1141,7 @@ class GameState {
   startDiscussionTimer() {
     this.status = 'GAME';
     this.votes.clear();
-    this.timeLeft = 180; // 3 minutes discussion
+    this.timeLeft = 180; // 3 minutes
     this.broadcastState();
 
     if (this.timer) clearInterval(this.timer);
@@ -1138,7 +1159,7 @@ class GameState {
   startVotingPhase() {
     this.status = 'VOTING';
     this.votes.clear();
-    this.timeLeft = 30; // 30 seconds voting
+    this.timeLeft = 30; // 30 seconds
     this.addLog(`Началось голосование на выбывание! Раунд ${this.round}. У вас 30 секунд.`);
     this.broadcastState();
 
@@ -1162,6 +1183,11 @@ class GameState {
     if (!voter || voter.eliminated) return;
     if (!target || target.eliminated) return;
 
+    if (voterId === targetId) {
+      this.io.to(voterId).emit('action:private', { title: 'Ошибка', message: 'Нельзя голосовать против самого себя!' });
+      return;
+    }
+
     const mods = this.specialModifiers.get(voterId) || {};
     if (mods.cancelVote) {
       this.io.to(voterId).emit('action:private', { title: 'Голосование заблокировано', message: 'Ваше право голоса отменено спец-картой!' });
@@ -1172,7 +1198,6 @@ class GameState {
     this.addLog(`Игрок ${voter.name} сделал свой выбор.`);
     this.broadcastVoteUpdate();
 
-    // If all alive non-blocked players voted, resolve early
     const alivePlayers = this.getAlivePlayers();
     const validVoters = alivePlayers.filter(p => {
       const pMods = this.specialModifiers.get(p.id) || {};
@@ -1219,7 +1244,6 @@ class GameState {
       }
     }
 
-    // Reset doubleVote & cancelVote modifiers after voting
     this.specialModifiers.forEach(mod => {
       mod.doubleVote = false;
       mod.cancelVote = false;
@@ -1247,7 +1271,7 @@ class GameState {
       this.addLog(`Игрок ${eliminatedPlayer.name} был выбран на изгнание, но его защитила спец-карта Иммунитета!`);
     } else {
       eliminatedPlayer.eliminated = true;
-      this.addLog(`Игрок ${eliminatedPlayer.name} был изгнан из бункера большиством голосов!`);
+      this.addLog(`Игрок ${eliminatedPlayer.name} был изгнан из бункера большинством голосов!`);
       this.io.emit('game:elimination', { playerId: eliminatedId, playerName: eliminatedPlayer.name });
     }
 
@@ -1298,14 +1322,20 @@ class GameState {
       return;
     }
 
-    card.revealed = true;
     const action = card.details ? card.details.action : null;
+    const requiresTarget = ['spy', 'swap_inventory', 'swap_backpack', 'cancel_vote', 'force_reveal', 'cure_health', 'cure_phobia'].includes(action);
+
+    if (requiresTarget && targetId === socketId) {
+      this.io.to(socketId).emit('action:private', { title: 'Ошибка', message: 'Эту способность нельзя применять на самого себя!' });
+      return;
+    }
+
+    card.revealed = true;
     const target = this.players.get(targetId);
 
     this.addLog(`Игрок ${player.name} применил спец-карту "${card.value}"!`);
 
     if (action === 'spy' && target) {
-      // Send private details of target's random unrevealed or health/biology card
       const targetCards = target.cards;
       const unrevealedCats = Object.keys(targetCards).filter(c => !targetCards[c].revealed);
       const chosenCat = unrevealedCats.length > 0 ? unrevealedCats[Math.floor(Math.random() * unrevealedCats.length)] : 'health';
@@ -1418,7 +1448,12 @@ const GameState = require('./src/logic/GameState');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -1493,14 +1528,18 @@ const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 const LOCAL_IP = getLocalIp();
 
-server.listen(PORT, HOST, () => {
-  console.log('====================================================');
-  console.log('   🔥 ПОСТАПОКАЛИПТИЧЕСКАЯ ВЕБ-ИГРА «БУНКЕР» 🔥     ');
-  console.log('====================================================');
-  console.log(` Сервер запущен на хосте: ${HOST}:${PORT}`);
-  console.log(` 🌐 Игра доступна по адресу: http://${LOCAL_IP}:${PORT}`);
-  console.log('====================================================');
-});
+if (require.main === module) {
+  server.listen(PORT, HOST, () => {
+    console.log('====================================================');
+    console.log('   🔥 ПОСТАПОКАЛИПТИЧЕСКАЯ ВЕБ-ИГРА «БУНКЕР» 🔥     ');
+    console.log('====================================================');
+    console.log(` Сервер запущен на хосте: ${HOST}:${PORT}`);
+    console.log(` 🌐 Игра доступна по адресу: http://${LOCAL_IP}:${PORT}`);
+    console.log('====================================================');
+  });
+}
+
+module.exports = app;
 
 EOF
 
@@ -1510,7 +1549,7 @@ cat << 'EOF' > bunker-game/public/index.html
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Игра «Бункер» — Постапокалипсис</title>
+  <title>Игра «Бункер» — Постапокалипсис (Онлайн)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/socket.io/socket.io.js"></script>
   <link rel="stylesheet" href="/css/style.css">
@@ -1521,8 +1560,8 @@ cat << 'EOF' > bunker-game/public/index.html
   <div id="join-modal" class="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-800 border border-amber-600 rounded-xl p-6 max-w-md w-full shadow-2xl text-center space-y-5">
       <div class="text-4xl">☢️</div>
-      <h1 class="text-3xl font-extrabold text-amber-500 tracking-wider">БУНКЕР</h1>
-      <p class="text-gray-400 text-sm">Введите ваш никнейм для входа в выживание</p>
+      <h1 class="text-3xl font-extrabold text-amber-500 tracking-wider">БУНКЕР ОНЛАЙН</h1>
+      <p class="text-gray-400 text-sm">От 6 до 16 игроков. Введите ваш никнейм:</p>
       <input type="text" id="player-name-input" placeholder="Ваше имя..." class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500 text-center text-lg text-white">
       <button id="join-btn" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-black font-bold text-lg rounded-lg transition duration-200 shadow-lg">ВОЙТИ В ИГРУ</button>
     </div>
@@ -1531,7 +1570,7 @@ cat << 'EOF' > bunker-game/public/index.html
   <!-- ACTION TARGET SELECTION MODAL -->
   <div id="action-modal" class="hidden fixed inset-0 bg-black bg-opacity-80 z-40 flex items-center justify-center p-4">
     <div class="bg-gray-800 border border-amber-500 rounded-xl p-6 max-w-md w-full text-center space-y-4">
-      <h3 id="action-modal-title" class="text-xl font-bold text-amber-400">Выберите цель применения</h3>
+      <h3 id="action-modal-title" class="text-xl font-bold text-amber-400">Выберите другого игрока</h3>
       <div id="action-target-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
       <button id="action-modal-cancel" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300 font-semibold">Отмена</button>
     </div>
@@ -1540,7 +1579,7 @@ cat << 'EOF' > bunker-game/public/index.html
   <!-- PRIVATE MESSAGE MODAL -->
   <div id="private-modal" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-800 border border-yellow-500 rounded-xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
-      <h3 id="private-modal-title" class="text-xl font-bold text-yellow-400">🕵️ Секретная информация</h3>
+      <h3 id="private-modal-title" class="text-xl font-bold text-yellow-400">🕵️ Уведомление</h3>
       <p id="private-modal-body" class="text-gray-200 text-base leading-relaxed bg-gray-900 p-4 rounded-lg border border-gray-700"></p>
       <button id="private-modal-close" class="w-full py-2 bg-amber-600 hover:bg-amber-500 font-bold rounded-lg text-black">ПОНЯТНО</button>
     </div>
@@ -1555,23 +1594,21 @@ cat << 'EOF' > bunker-game/public/index.html
     </div>
     <div class="flex items-center space-x-4">
       <div id="timer-box" class="hidden text-amber-400 font-mono font-bold text-lg bg-gray-900 border border-amber-900/50 px-3 py-1 rounded-lg">⏱️ <span id="timer-text">03:00</span></div>
-      <button id="host-start-btn" class="hidden px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-lg shadow transition">НАЧАТЬ ИГРУ</button>
+      <button id="host-start-btn" class="hidden px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-lg shadow transition">НАЧАТЬ ИГРУ (6+)</button>
       <button id="host-next-btn" class="hidden px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-black font-bold text-sm rounded-lg shadow transition">СЛЕД. ФАЗА</button>
     </div>
   </header>
 
-  <!-- MAIN DASHBOARD (100vh setup) -->
+  <!-- MAIN DASHBOARD -->
   <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
 
-    <!-- DESKTOP & MOBILE CONTENT SECTIONS -->
     <!-- SECTION 1: MY CARDS -->
     <section id="tab-my-cards" class="tab-content active-tab flex-1 flex flex-col p-3 border-r border-gray-800 overflow-y-auto">
       <h2 class="text-md font-bold text-amber-500 mb-2 flex items-center justify-between shrink-0">
         <span>🃏 Мои характеристики</span>
-        <span id="my-status-tag" class="text-xs text-gray-400 font-normal">Ваши карты зашифрованы</span>
+        <span id="my-status-tag" class="text-xs text-gray-400 font-normal">Нажмите "Открыть" для показа другим</span>
       </h2>
       <div id="my-cards-grid" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-        <!-- Cards rendered dynamically -->
       </div>
     </section>
 
@@ -1605,7 +1642,7 @@ cat << 'EOF' > bunker-game/public/index.html
     <!-- SECTION 3: PLAYERS -->
     <section id="tab-players" class="tab-content hidden md:flex w-full md:w-80 flex-col p-3 shrink-0 overflow-y-auto">
       <h2 class="text-md font-bold text-amber-500 mb-2 flex items-center justify-between shrink-0">
-        <span>👥 Выжившие</span>
+        <span>👥 Выжившие (6-16)</span>
         <span id="players-count" class="text-xs text-gray-400">0 человек</span>
       </h2>
       <div id="players-list" class="space-y-2 overflow-y-auto flex-1"></div>
@@ -1644,7 +1681,6 @@ body {
   touch-action: manipulation;
 }
 
-/* Scrollbar customization */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -1784,14 +1820,12 @@ const UI = {
   updateGameState(state) {
     this.currentState = state;
 
-    // Phase badge
     const badge = document.getElementById('phase-badge');
-    if (state.status === 'LOBBY') badge.innerText = 'Лобби';
+    if (state.status === 'LOBBY') badge.innerText = `Лобби (${state.players.length}/16)`;
     else if (state.status === 'GAME') badge.innerText = `Раунд ${state.round}: Дискуссия`;
     else if (state.status === 'VOTING') badge.innerText = `Раунд ${state.round}: Голосование`;
     else if (state.status === 'GAME_OVER') badge.innerText = 'Игра Завершена';
 
-    // Host controls
     const isHost = socket.id === state.hostId;
     const startBtn = document.getElementById('host-start-btn');
     const nextBtn = document.getElementById('host-next-btn');
@@ -1808,7 +1842,6 @@ const UI = {
       nextBtn.classList.add('hidden');
     }
 
-    // Timer box
     const timerBox = document.getElementById('timer-box');
     if (state.status !== 'LOBBY' && state.status !== 'GAME_OVER') {
       timerBox.classList.remove('hidden');
@@ -1816,7 +1849,6 @@ const UI = {
       timerBox.classList.add('hidden');
     }
 
-    // Render Disaster & Bunker
     if (state.disaster) {
       document.getElementById('disaster-title').innerText = state.disaster.title;
       document.getElementById('disaster-desc').innerText = state.disaster.desc;
@@ -1827,14 +1859,9 @@ const UI = {
       document.getElementById('bunker-capacity').innerText = `${state.bunkerCapacity} чел.`;
     }
 
-    // Render My Cards
     const me = state.players.find(p => p.id === socket.id);
     this.renderMyCards(me);
-
-    // Render Players
     this.renderPlayersList(state.players, me);
-
-    // Render Logs
     this.renderLogs(state.logs);
   },
 
@@ -1883,17 +1910,34 @@ const UI = {
 
   handleSpecialCardClick(cat) {
     this.selectedCategoryForAction = cat;
+    const me = this.currentState.players.find(p => p.id === socket.id);
+    if (!me || !me.cards || !me.cards[cat]) return;
+
+    const action = me.cards[cat].details ? me.cards[cat].details.action : null;
+
+    // Self-only / Non-targeted abilities execute directly on self
+    if (action === 'double_vote' || action === 'immunity') {
+      SocketHandler.useCardAction(cat, socket.id);
+      return;
+    }
+
+    // Targeted abilities MUST select ANOTHER player (self excluded!)
     const modal = document.getElementById('action-modal');
     const targetList = document.getElementById('action-target-list');
     targetList.innerHTML = '';
 
-    const me = this.currentState.players.find(p => p.id === socket.id);
-    const alivePlayers = this.currentState.players.filter(p => !p.eliminated);
+    // Filter out self so player CANNOT target themselves
+    const otherAlivePlayers = this.currentState.players.filter(p => !p.eliminated && p.id !== socket.id);
 
-    alivePlayers.forEach(p => {
+    if (otherAlivePlayers.length === 0) {
+      alert('Нет других доступных игроков для применения способности!');
+      return;
+    }
+
+    otherAlivePlayers.forEach(p => {
       const btn = document.createElement('button');
       btn.className = 'w-full py-2 bg-gray-700 hover:bg-amber-600 hover:text-black rounded text-sm text-gray-200 font-medium transition';
-      btn.innerText = p.id === socket.id ? `${p.name} (Вы)` : p.name;
+      btn.innerText = p.name;
       btn.onclick = () => {
         SocketHandler.useCardAction(cat, p.id);
         modal.classList.add('hidden');
@@ -2042,6 +2086,6 @@ echo "📦 Установка зависимостей..."
 cd bunker-game
 npm install
 echo "=========================================="
-echo "🎉 Проект готов к запуску!"
-echo "Для запуска используйте: cd bunker-game && npm start"
+echo "🎉 Проект готов к запуску и деплою на Vercel!"
+echo "Для локального запуска используйте: cd bunker-game && npm start"
 echo "=========================================="

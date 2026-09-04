@@ -23,6 +23,10 @@ class GameState {
       return { success: false, message: 'Игра уже началась' };
     }
 
+    if (this.players.size >= 16) {
+      return { success: false, message: 'Комната заполнена (максимум 16 игроков)!' };
+    }
+
     const player = {
       id: socketId,
       name: name.trim() || `Игрок_${socketId.substring(0, 4)}`,
@@ -36,7 +40,7 @@ class GameState {
     }
 
     this.players.set(socketId, player);
-    this.addLog(`Игрок ${player.name} присоединился к игре.`);
+    this.addLog(`Игрок ${player.name} присоединился к игре. (${this.players.size}/16)`);
     return { success: true, player };
   }
 
@@ -72,8 +76,8 @@ class GameState {
   }
 
   startGame() {
-    if (this.players.size < 2) {
-      return { success: false, message: 'Для начала игры нужно минимум 2 игрока' };
+    if (this.players.size < 6) {
+      return { success: false, message: 'Для начала игры необходимо минимум 6 игроков (сейчас: ' + this.players.size + ')!' };
     }
 
     this.cardGenerator.reset();
@@ -92,7 +96,7 @@ class GameState {
 
     this.status = 'GAME';
     this.round = 1;
-    this.addLog(`Игра началась! Катастрофа: "${this.disaster.title}". Мест в бункере: ${this.bunkerCapacity}.`);
+    this.addLog(`Игра началась! Участников: ${totalPlayers}. Мест в бункере: ${this.bunkerCapacity}. Катастрофа: "${this.disaster.title}".`);
 
     this.startDiscussionTimer();
     return { success: true };
@@ -101,7 +105,7 @@ class GameState {
   startDiscussionTimer() {
     this.status = 'GAME';
     this.votes.clear();
-    this.timeLeft = 180; // 3 minutes discussion
+    this.timeLeft = 180; // 3 minutes
     this.broadcastState();
 
     if (this.timer) clearInterval(this.timer);
@@ -119,7 +123,7 @@ class GameState {
   startVotingPhase() {
     this.status = 'VOTING';
     this.votes.clear();
-    this.timeLeft = 30; // 30 seconds voting
+    this.timeLeft = 30; // 30 seconds
     this.addLog(`Началось голосование на выбывание! Раунд ${this.round}. У вас 30 секунд.`);
     this.broadcastState();
 
@@ -143,6 +147,11 @@ class GameState {
     if (!voter || voter.eliminated) return;
     if (!target || target.eliminated) return;
 
+    if (voterId === targetId) {
+      this.io.to(voterId).emit('action:private', { title: 'Ошибка', message: 'Нельзя голосовать против самого себя!' });
+      return;
+    }
+
     const mods = this.specialModifiers.get(voterId) || {};
     if (mods.cancelVote) {
       this.io.to(voterId).emit('action:private', { title: 'Голосование заблокировано', message: 'Ваше право голоса отменено спец-картой!' });
@@ -153,7 +162,6 @@ class GameState {
     this.addLog(`Игрок ${voter.name} сделал свой выбор.`);
     this.broadcastVoteUpdate();
 
-    // If all alive non-blocked players voted, resolve early
     const alivePlayers = this.getAlivePlayers();
     const validVoters = alivePlayers.filter(p => {
       const pMods = this.specialModifiers.get(p.id) || {};
@@ -200,7 +208,6 @@ class GameState {
       }
     }
 
-    // Reset doubleVote & cancelVote modifiers after voting
     this.specialModifiers.forEach(mod => {
       mod.doubleVote = false;
       mod.cancelVote = false;
@@ -228,7 +235,7 @@ class GameState {
       this.addLog(`Игрок ${eliminatedPlayer.name} был выбран на изгнание, но его защитила спец-карта Иммунитета!`);
     } else {
       eliminatedPlayer.eliminated = true;
-      this.addLog(`Игрок ${eliminatedPlayer.name} был изгнан из бункера большиством голосов!`);
+      this.addLog(`Игрок ${eliminatedPlayer.name} был изгнан из бункера большинством голосов!`);
       this.io.emit('game:elimination', { playerId: eliminatedId, playerName: eliminatedPlayer.name });
     }
 
@@ -279,14 +286,20 @@ class GameState {
       return;
     }
 
-    card.revealed = true;
     const action = card.details ? card.details.action : null;
+    const requiresTarget = ['spy', 'swap_inventory', 'swap_backpack', 'cancel_vote', 'force_reveal', 'cure_health', 'cure_phobia'].includes(action);
+
+    if (requiresTarget && targetId === socketId) {
+      this.io.to(socketId).emit('action:private', { title: 'Ошибка', message: 'Эту способность нельзя применять на самого себя!' });
+      return;
+    }
+
+    card.revealed = true;
     const target = this.players.get(targetId);
 
     this.addLog(`Игрок ${player.name} применил спец-карту "${card.value}"!`);
 
     if (action === 'spy' && target) {
-      // Send private details of target's random unrevealed or health/biology card
       const targetCards = target.cards;
       const unrevealedCats = Object.keys(targetCards).filter(c => !targetCards[c].revealed);
       const chosenCat = unrevealedCats.length > 0 ? unrevealedCats[Math.floor(Math.random() * unrevealedCats.length)] : 'health';

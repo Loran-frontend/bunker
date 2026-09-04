@@ -22,7 +22,6 @@ class CardGenerator {
 
   getRandomItem(category) {
     if (!this.pools[category] || this.pools[category].length === 0) {
-      // Refill if empty
       this.pools[category] = [...cardsData[category]];
     }
     const idx = Math.floor(Math.random() * this.pools[category].length);

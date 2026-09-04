@@ -1,7 +1,7 @@
 {
   "name": "bunker-game",
   "version": "1.0.0",
-  "description": "Bunker board game web application for local network",
+  "description": "Bunker board game web application for online / local network",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
