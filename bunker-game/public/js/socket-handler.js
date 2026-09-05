@@ -1,4 +1,4 @@
-const socket = io();
+const socket = io("https://bunker-backend-wh84.onrender.com");
 
 const SocketHandler = {
   joinRoom(name) {
