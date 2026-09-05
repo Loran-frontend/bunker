@@ -10,14 +10,28 @@
 </head>
 <body class="bg-gray-900 text-gray-100 h-full flex flex-col font-sans select-none overflow-hidden">
 
-  <!-- JOIN MODAL -->
+  <!-- JOIN / CREATE ROOM MODAL -->
   <div id="join-modal" class="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
-    <div class="bg-gray-800 border border-amber-600 rounded-xl p-6 max-w-md w-full shadow-2xl text-center space-y-5">
+    <div class="bg-gray-800 border border-amber-600 rounded-xl p-6 max-w-md w-full shadow-2xl text-center space-y-4">
       <div class="text-4xl">☢️</div>
       <h1 class="text-3xl font-extrabold text-amber-500 tracking-wider">БУНКЕР ОНЛАЙН</h1>
       <p class="text-gray-400 text-sm">От 6 до 16 игроков. Введите ваш никнейм:</p>
       <input type="text" id="player-name-input" placeholder="Ваше имя..." class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500 text-center text-lg text-white">
-      <button id="join-btn" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-black font-bold text-lg rounded-lg transition duration-200 shadow-lg">ВОЙТИ В ИГРУ</button>
+
+      <div class="flex flex-col space-y-3 pt-2">
+        <button id="create-room-btn" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-black font-bold text-lg rounded-lg transition duration-200 shadow-lg">СОЗДАТЬ НОВУЮ КОМНАТУ</button>
+
+        <div class="flex items-center my-1 text-[11px] text-gray-500 uppercase tracking-widest">
+          <div class="flex-1 border-t border-gray-700"></div>
+          <span class="px-3">ИЛИ ПРИСОЕДИНИТЬСЯ</span>
+          <div class="flex-1 border-t border-gray-700"></div>
+        </div>
+
+        <div class="flex space-x-2">
+          <input type="text" id="room-code-input" placeholder="Код (напр. BUNK-4021)" class="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500 text-center text-sm font-mono uppercase text-amber-400">
+          <button id="join-room-btn" class="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-lg text-sm transition">ВОЙТИ</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -39,34 +53,83 @@
     </div>
   </div>
 
+  <!-- FINALE MODAL -->
+  <div id="finale-modal" class="hidden fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-gray-900 border border-amber-500 rounded-xl p-6 max-w-2xl w-full text-center space-y-5 shadow-2xl my-auto max-h-[90vh] flex flex-col">
+      <h2 id="finale-title" class="text-2xl sm:text-3xl font-extrabold text-amber-400 tracking-wide">🏆 ИТОГИ ВЫЖИВАНИЯ</h2>
+      <div id="finale-outcome" class="text-sm font-bold px-3 py-1.5 rounded-lg inline-block mx-auto"></div>
+      <div id="finale-body" class="text-gray-300 text-sm sm:text-base leading-relaxed bg-gray-950 p-4 rounded-lg border border-gray-800 overflow-y-auto text-left whitespace-pre-wrap flex-1 max-h-96"></div>
+      <button id="finale-modal-close" class="w-full py-3 bg-amber-600 hover:bg-amber-500 font-bold rounded-lg text-black text-lg">ЗАКРЫТЬ</button>
+    </div>
+  </div>
+
   <!-- HEADER -->
   <header class="bg-gray-950 border-b border-gray-800 px-4 py-2 flex items-center justify-between shrink-0 h-14">
-    <div class="flex items-center space-x-3">
+    <div class="flex items-center space-x-2 sm:space-x-3">
       <span class="text-2xl">☢️</span>
       <h1 class="text-lg font-bold text-amber-500 tracking-widest hidden sm:inline">БУНКЕР</h1>
+      <span id="room-code-badge" class="hidden px-2.5 py-1 text-xs font-mono font-bold rounded bg-amber-950 text-amber-400 border border-amber-600/50"></span>
       <span id="phase-badge" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-800 text-gray-300 border border-gray-700">ОЖИДАНИЕ</span>
     </div>
-    <div class="flex items-center space-x-4">
-      <div id="timer-box" class="hidden text-amber-400 font-mono font-bold text-lg bg-gray-900 border border-amber-900/50 px-3 py-1 rounded-lg">⏱️ <span id="timer-text">03:00</span></div>
-      <button id="host-start-btn" class="hidden px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-lg shadow transition">НАЧАТЬ ИГРУ (6+)</button>
-      <button id="host-next-btn" class="hidden px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-black font-bold text-sm rounded-lg shadow transition">СЛЕД. ФАЗА</button>
+
+    <!-- VOICE CONTROLS & TIMER & HOST ACTIONS -->
+    <div class="flex items-center space-x-2 sm:space-x-3">
+      <!-- VOICE CONTROLS -->
+      <div id="voice-controls" class="flex items-center space-x-1 bg-gray-900 border border-gray-800 rounded-lg p-0.5">
+        <button id="voice-mute-btn" title="Включить / Выключить микрофон" class="px-2 py-1 text-xs font-bold rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-800">🎤 Вкл</button>
+        <button id="voice-deafen-btn" title="Включить / Выключить звук других" class="px-2 py-1 text-xs font-bold rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-800">🎧 Звук</button>
+      </div>
+
+      <div id="timer-box" class="hidden text-amber-400 font-mono font-bold text-sm sm:text-lg bg-gray-900 border border-amber-900/50 px-2.5 py-1 rounded-lg">⏱️ <span id="timer-text">03:00</span></div>
+      <button id="host-start-btn" class="hidden px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm rounded-lg shadow transition">СТАРТ (6+)</button>
+      <button id="host-next-btn" class="hidden px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-black font-bold text-xs sm:text-sm rounded-lg shadow transition">СЛЕД. ФАЗА</button>
     </div>
   </header>
 
   <!-- MAIN DASHBOARD -->
   <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
 
-    <!-- SECTION 1: MY CARDS -->
+    <!-- SECTION 1: MY CARDS & TURN STATUS -->
     <section id="tab-my-cards" class="tab-content active-tab flex-1 flex flex-col p-3 border-r border-gray-800 overflow-y-auto">
+
+      <!-- HOST LOBBY SETTINGS PANEL -->
+      <div id="host-settings-panel" class="hidden mb-3 p-3 bg-gray-800 border border-amber-600/50 rounded-lg space-y-2">
+        <div class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center justify-between">
+          <span>⚙️ Настройки комнаты (Хост)</span>
+          <span class="text-[10px] text-gray-400">Минимум 6 игроков для старта</span>
+        </div>
+        <label class="flex items-center space-x-2 text-xs text-gray-200 cursor-pointer">
+          <input type="checkbox" id="traitor-toggle" class="w-4 h-4 accent-amber-500 rounded" checked>
+          <span class="font-semibold">🕵️ Режим «Секретный Предатель»</span>
+        </label>
+        <p class="text-[11px] text-gray-400">Один случайный игрок станет предателем (саботажником), пытающимся уничтожить бункер.</p>
+      </div>
+
+      <!-- TRAITOR BANNER (ONLY FOR TRAITOR) -->
+      <div id="traitor-banner" class="hidden mb-3 p-3 bg-red-950/80 border border-red-600 rounded-lg text-xs space-y-1 shadow-lg">
+        <div class="font-extrabold text-red-400 text-sm flex items-center space-x-1">
+          <span>🕵️ ВЫ — СЕКРЕТНЫЙ ПРЕДАТЕЛЬ!</span>
+        </div>
+        <p class="text-gray-300 leading-normal">
+          Ваша цель: саботировать выживание бункера, чтобы в финальном событии бункер потерпел крах, либо дожить до конца без разоблачения!
+        </p>
+      </div>
+
+      <!-- TURN & PHASE BANNER -->
+      <div id="turn-banner" class="hidden mb-3 p-2.5 bg-amber-950/60 border border-amber-600/60 rounded-lg text-xs font-semibold text-amber-300 flex items-center justify-between">
+        <span id="turn-banner-text">Ход игрока: ...</span>
+        <span id="turn-banner-timer" class="font-mono font-bold text-amber-400"></span>
+      </div>
+
       <h2 class="text-md font-bold text-amber-500 mb-2 flex items-center justify-between shrink-0">
         <span>🃏 Мои характеристики</span>
-        <span id="my-status-tag" class="text-xs text-gray-400 font-normal">Нажмите "Открыть" для показа другим</span>
+        <span id="my-status-tag" class="text-xs text-gray-400 font-normal">Нажмите "Открыть" на своем ходу</span>
       </h2>
       <div id="my-cards-grid" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
       </div>
     </section>
 
-    <!-- SECTION 2: BUNKER & DISASTER -->
+    <!-- SECTION 2: BUNKER & CHAT / LOGS -->
     <section id="tab-bunker" class="tab-content hidden md:flex w-full md:w-80 flex-col p-3 border-r border-gray-800 shrink-0 space-y-3 overflow-y-auto bg-gray-900/50">
       <div>
         <h3 class="text-sm font-bold text-red-500 mb-1 tracking-wide">💥 КАТАСТРОФА</h3>
@@ -86,10 +149,17 @@
           </div>
         </div>
       </div>
-      <!-- LOGS PANEL -->
-      <div class="flex-1 flex flex-col min-h-[140px]">
-        <h3 class="text-sm font-bold text-gray-400 mb-1">📜 Лог событий</h3>
-        <div id="game-logs" class="flex-1 bg-gray-950 border border-gray-800 rounded-lg p-2 text-[11px] font-mono text-gray-300 overflow-y-auto space-y-1"></div>
+
+      <!-- TEXT CHAT & LOGS PANEL -->
+      <div class="flex-1 flex flex-col min-h-[180px]">
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="text-sm font-bold text-gray-400">💬 Чат и События</h3>
+        </div>
+        <div id="game-logs" class="flex-1 bg-gray-950 border border-gray-800 rounded-t-lg p-2 text-[11px] font-mono text-gray-300 overflow-y-auto space-y-1"></div>
+        <div class="flex border-t border-gray-800 bg-gray-950 rounded-b-lg">
+          <input type="text" id="chat-input" placeholder="Сообщение..." class="flex-1 px-2.5 py-1.5 bg-gray-900 text-xs text-white focus:outline-none rounded-bl-lg">
+          <button id="chat-send-btn" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-black font-bold text-xs rounded-br-lg">Отправить</button>
+        </div>
       </div>
     </section>
 
@@ -121,6 +191,7 @@
   </nav>
 
   <script src="/js/ui.js"></script>
+  <script src="/js/voice-chat.js"></script>
   <script src="/js/socket-handler.js"></script>
   <script src="/js/app.js"></script>
 </body>

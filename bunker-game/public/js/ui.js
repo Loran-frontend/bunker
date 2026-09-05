@@ -14,6 +14,7 @@ const categoryNames = {
 const UI = {
   currentState: null,
   selectedCategoryForAction: null,
+  speakingPlayers: new Set(),
 
   init() {
     this.setupMobileTabs();
@@ -47,10 +48,23 @@ const UI = {
   updateGameState(state) {
     this.currentState = state;
 
+    if (window.VoiceChat) {
+      window.VoiceChat.syncPeers(state.players);
+      window.VoiceChat.updateDefenseSpeechMuting(state);
+    }
+
+    const codeBadge = document.getElementById('room-code-badge');
+    if (state.roomId) {
+      codeBadge.innerText = `Код: ${state.roomId}`;
+      codeBadge.classList.remove('hidden');
+    }
+
     const badge = document.getElementById('phase-badge');
     if (state.status === 'LOBBY') badge.innerText = `Лобби (${state.players.length}/16)`;
-    else if (state.status === 'GAME') badge.innerText = `Раунд ${state.round}: Дискуссия`;
+    else if (state.status === 'REVEAL') badge.innerText = `Раунд ${state.round}: Раскрытие карт`;
+    else if (state.status === 'DISCUSSION') badge.innerText = `Раунд ${state.round}: Дискуссия`;
     else if (state.status === 'VOTING') badge.innerText = `Раунд ${state.round}: Голосование`;
+    else if (state.status === 'DEFENSE') badge.innerText = `Защитная речь (30 сек)`;
     else if (state.status === 'GAME_OVER') badge.innerText = 'Игра Завершена';
 
     const isHost = socket.id === state.hostId;
@@ -63,14 +77,24 @@ const UI = {
       startBtn.classList.add('hidden');
     }
 
-    if (isHost && (state.status === 'GAME' || state.status === 'VOTING')) {
+    if (isHost && state.status !== 'LOBBY' && state.status !== 'GAME_OVER') {
       nextBtn.classList.remove('hidden');
     } else {
       nextBtn.classList.add('hidden');
     }
 
+    // Host Settings Panel
+    const hostPanel = document.getElementById('host-settings-panel');
+    if (isHost && state.status === 'LOBBY') {
+      hostPanel.classList.remove('hidden');
+      const toggle = document.getElementById('traitor-toggle');
+      if (toggle) toggle.checked = !!state.traitorModeEnabled;
+    } else {
+      hostPanel.classList.add('hidden');
+    }
+
     const timerBox = document.getElementById('timer-box');
-    if (state.status !== 'LOBBY' && state.status !== 'GAME_OVER') {
+    if (state.status === 'DISCUSSION' || state.status === 'VOTING' || state.status === 'DEFENSE') {
       timerBox.classList.remove('hidden');
     } else {
       timerBox.classList.add('hidden');
@@ -87,12 +111,41 @@ const UI = {
     }
 
     const me = state.players.find(p => p.id === socket.id);
-    this.renderMyCards(me);
-    this.renderPlayersList(state.players, me);
+
+    // Traitor banner
+    const traitorBanner = document.getElementById('traitor-banner');
+    if (me && me.isTraitor) {
+      traitorBanner.classList.remove('hidden');
+    } else {
+      traitorBanner.classList.add('hidden');
+    }
+
+    // Turn & Phase Banner
+    const turnBanner = document.getElementById('turn-banner');
+    const turnText = document.getElementById('turn-banner-text');
+    if (state.status === 'REVEAL' && state.activePlayerName) {
+      turnBanner.classList.remove('hidden');
+      const isMyTurn = state.activePlayerId === socket.id;
+      turnText.innerText = isMyTurn ? '👉 ВАШ ХОД! Выберите и откройте 1 характеристику ниже.' : `⏳ Ход игрока ${state.activePlayerName} (открывает карту)...`;
+    } else if (state.status === 'DEFENSE' && state.defenseSpeakerId) {
+      turnBanner.classList.remove('hidden');
+      const speaker = state.players.find(p => p.id === state.defenseSpeakerId);
+      const isMySpeech = state.defenseSpeakerId === socket.id;
+      turnText.innerText = isMySpeech ? '🎙️ ВАША ЗАЩИТНАЯ РЕЧЬ! (30 сек)' : `🎙️ Защитная речь: ${speaker?.name || 'Кандидат'} (остальные микрофоны приглушены)`;
+    } else {
+      turnBanner.classList.add('hidden');
+    }
+
+    this.renderMyCards(me, state);
+    this.renderPlayersList(state.players, me, state);
     this.renderLogs(state.logs);
+
+    if (state.status === 'GAME_OVER' && state.finaleResult) {
+      this.showFinaleModal(state.finaleResult);
+    }
   },
 
-  renderMyCards(me) {
+  renderMyCards(me, state) {
     const grid = document.getElementById('my-cards-grid');
     grid.innerHTML = '';
 
@@ -101,11 +154,14 @@ const UI = {
       return;
     }
 
+    const isMyTurnToReveal = state && state.status === 'REVEAL' && state.activePlayerId === socket.id;
+    const isDiscussionOrVoting = state && (state.status === 'DISCUSSION' || state.status === 'VOTING');
+
     Object.keys(me.cards).forEach(cat => {
       const card = me.cards[cat];
       const cardEl = document.createElement('div');
       const isRevealed = card.revealed;
-      const isSpecial1 = cat === 'special1';
+      const isSpecial = cat === 'special1' || cat === 'special2';
 
       cardEl.className = `card-item border rounded-lg p-2.5 flex flex-col justify-between text-xs transition duration-200 ${
         isRevealed ? 'bg-gray-800/90 border-amber-600/70' : 'bg-gray-950 border-gray-800 hover:border-gray-700'
@@ -113,10 +169,18 @@ const UI = {
 
       let actionsHtml = '';
       if (!isRevealed) {
-        if (isSpecial1) {
-          actionsHtml = `<button onclick="UI.handleSpecialCardClick('${cat}')" class="mt-2 w-full py-1 bg-purple-700 hover:bg-purple-600 font-bold rounded text-white text-[11px]">Применить</button>`;
+        if (isSpecial) {
+          if (isDiscussionOrVoting) {
+            actionsHtml = `<button onclick="UI.handleSpecialCardClick('${cat}')" class="mt-2 w-full py-1 bg-purple-700 hover:bg-purple-600 font-bold rounded text-white text-[11px]">Применить</button>`;
+          } else {
+            actionsHtml = `<span class="mt-2 text-[10px] text-purple-400/70 text-center font-mono">Спец-карта</span>`;
+          }
         } else {
-          actionsHtml = `<button onclick="SocketHandler.revealCard('${cat}')" class="mt-2 w-full py-1 bg-amber-600 hover:bg-amber-500 font-bold rounded text-black text-[11px]">Открыть</button>`;
+          if (isMyTurnToReveal) {
+            actionsHtml = `<button onclick="SocketHandler.revealCard('${cat}')" class="mt-2 w-full py-1 bg-amber-600 hover:bg-amber-500 font-bold rounded text-black text-[11px] animate-pulse">Открыть карту</button>`;
+          } else {
+            actionsHtml = `<span class="mt-2 text-[10px] text-gray-500 text-center font-mono">Ждите своего хода</span>`;
+          }
         }
       } else {
         actionsHtml = `<span class="mt-2 text-[10px] text-amber-500/80 font-mono text-center">Открыто</span>`;
@@ -142,18 +206,15 @@ const UI = {
 
     const action = me.cards[cat].details ? me.cards[cat].details.action : null;
 
-    // Self-only / Non-targeted abilities execute directly on self
     if (action === 'double_vote' || action === 'immunity') {
       SocketHandler.useCardAction(cat, socket.id);
       return;
     }
 
-    // Targeted abilities MUST select ANOTHER player (self excluded!)
     const modal = document.getElementById('action-modal');
     const targetList = document.getElementById('action-target-list');
     targetList.innerHTML = '';
 
-    // Filter out self so player CANNOT target themselves
     const otherAlivePlayers = this.currentState.players.filter(p => !p.eliminated && p.id !== socket.id);
 
     if (otherAlivePlayers.length === 0) {
@@ -175,7 +236,7 @@ const UI = {
     modal.classList.remove('hidden');
   },
 
-  renderPlayersList(players, me) {
+  renderPlayersList(players, me, state) {
     const list = document.getElementById('players-list');
     list.innerHTML = '';
 
@@ -183,11 +244,14 @@ const UI = {
 
     players.forEach(p => {
       const isSelf = p.id === socket.id;
-      const isVoting = this.currentState.status === 'VOTING' && me && !me.eliminated && !p.eliminated;
+      const isVoting = state && state.status === 'VOTING' && me && !me.eliminated && !p.eliminated;
+      const isSpeaking = this.speakingPlayers.has(p.id);
 
       const pEl = document.createElement('div');
-      pEl.className = `p-2.5 rounded-lg border text-xs space-y-1.5 ${
-        p.eliminated ? 'bg-red-950/20 border-red-900/40 opacity-60' : isSelf ? 'bg-amber-950/20 border-amber-600/60' : 'bg-gray-800/60 border-gray-700'
+      pEl.className = `p-2.5 rounded-lg border text-xs space-y-1.5 transition-all ${
+        p.eliminated ? 'bg-red-950/20 border-red-900/40 opacity-60' :
+        isSpeaking ? 'bg-amber-950/40 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' :
+        isSelf ? 'bg-amber-950/20 border-amber-600/60' : 'bg-gray-800/60 border-gray-700'
       }`;
 
       let cardsHtml = '';
@@ -208,7 +272,7 @@ const UI = {
       pEl.innerHTML = `
         <div class="flex items-center justify-between">
           <span class="font-bold text-sm ${p.eliminated ? 'line-through text-red-500' : 'text-gray-200'}">
-            ${p.name} ${p.isHost ? '👑' : ''} ${isSelf ? '(Вы)' : ''}
+            ${isSpeaking ? '🗣️ ' : ''}${p.name} ${p.isHost ? '👑' : ''} ${isSelf ? '(Вы)' : ''}
           </span>
           <div class="flex items-center space-x-2">
             <span id="vote-count-${p.id}" class="text-xs font-bold text-red-400"></span>
@@ -222,6 +286,18 @@ const UI = {
 
       list.appendChild(pEl);
     });
+  },
+
+  updateSpeakingStatus(playerId, isSpeaking) {
+    if (isSpeaking) {
+      this.speakingPlayers.add(playerId);
+    } else {
+      this.speakingPlayers.delete(playerId);
+    }
+    if (this.currentState) {
+      const me = this.currentState.players.find(p => p.id === socket.id);
+      this.renderPlayersList(this.currentState.players, me, this.currentState);
+    }
   },
 
   updateVoteCounts(voteCounts) {
@@ -244,6 +320,25 @@ const UI = {
     document.getElementById('private-modal-title').innerText = title;
     document.getElementById('private-modal-body').innerText = message;
     document.getElementById('private-modal').classList.remove('hidden');
+  },
+
+  showFinaleModal(result) {
+    if (!result) return;
+    const modal = document.getElementById('finale-modal');
+    const title = document.getElementById('finale-title');
+    const outcome = document.getElementById('finale-outcome');
+    const body = document.getElementById('finale-body');
+
+    if (result.victory) {
+      outcome.className = 'text-sm font-bold px-3 py-1.5 rounded-lg inline-block mx-auto bg-emerald-950 border border-emerald-500 text-emerald-300';
+      outcome.innerText = '🎉 ПОБЕДА ВЫЖИВШИХ! (Бункер выжил)';
+    } else {
+      outcome.className = 'text-sm font-bold px-3 py-1.5 rounded-lg inline-block mx-auto bg-red-950 border border-red-500 text-red-300';
+      outcome.innerText = '💥 ПОБЕДА САБОТАЖНИКА! (Бункер потерпел крах)';
+    }
+
+    body.innerText = result.story || 'Итоги подведены.';
+    modal.classList.remove('hidden');
   },
 
   renderLogs(logs) {
