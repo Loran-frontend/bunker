@@ -1,8 +1,20 @@
 const socket = io();
 
 const SocketHandler = {
-  joinRoom(name) {
-    socket.emit('room:join', { name });
+  createRoom(name) {
+    socket.emit('room:create', { name });
+  },
+
+  joinRoom(name, roomId) {
+    socket.emit('room:join', { name, roomId });
+  },
+
+  updateSettings(settings) {
+    socket.emit('room:settings', settings);
+  },
+
+  sendChatMessage(text) {
+    socket.emit('chat:message', { text });
   },
 
   startGame() {
@@ -25,7 +37,19 @@ const SocketHandler = {
     socket.emit('vote:cast', { targetId });
   },
 
+  sendVoiceSignal(targetId, signal) {
+    socket.emit('voice:signal', { targetId, signal });
+  },
+
+  sendVoiceSpeaking(isSpeaking) {
+    socket.emit('voice:speaking', { isSpeaking });
+  },
+
   initListeners() {
+    socket.on('room:created', (data) => {
+      UI.updateGameState(data.state);
+    });
+
     socket.on('game:init', (state) => {
       UI.updateGameState(state);
     });
@@ -48,6 +72,20 @@ const SocketHandler = {
 
     socket.on('log:new', (logMessage) => {
       UI.appendLog(logMessage);
+    });
+
+    socket.on('voice:signal', (data) => {
+      if (window.VoiceChat) {
+        window.VoiceChat.handleSignal(data.senderId, data.signal);
+      }
+    });
+
+    socket.on('voice:speaking_update', (data) => {
+      UI.updateSpeakingStatus(data.playerId, data.isSpeaking);
+    });
+
+    socket.on('game:finale', (result) => {
+      UI.showFinaleModal(result);
     });
 
     socket.on('error:msg', (msg) => {

@@ -3,20 +3,28 @@ const http = require('http');
 const { Server } = require('socket.io');
 const os = require('os');
 const path = require('path');
-const GameState = require('./src/logic/GameState');
+const RoomManager = require('./src/logic/RoomManager');
 
 const app = express();
 const server = http.createServer(app);
+
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
+const corsOrigins = CLIENT_ORIGIN.includes(',') ? CLIENT_ORIGIN.split(',').map(o => o.trim()) : CLIENT_ORIGIN;
+
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: corsOrigins,
     methods: ["GET", "POST"]
   }
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const gameState = new GameState(io);
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+const roomManager = new RoomManager(io);
 
 function getLocalIp() {
   const interfaces = os.networkInterfaces();
@@ -33,20 +41,38 @@ function getLocalIp() {
 io.on('connection', (socket) => {
   console.log(`[Socket] Новое подключение: ${socket.id}`);
 
-  socket.on('room:join', ({ name }) => {
-    const result = gameState.addPlayer(socket.id, name);
-    if (result.success) {
-      socket.emit('game:init', gameState.getSanitizedState(socket.id));
-      gameState.broadcastState();
-    } else {
-      socket.emit('error:msg', result.message);
+  socket.on('room:create', ({ name }) => {
+    const { roomId, res } = roomManager.createRoom(socket, name);
+    if (!res.success) {
+      socket.emit('error:msg', res.message);
+    }
+  });
+
+  socket.on('room:join', ({ name, roomId }) => {
+    const res = roomManager.joinRoom(socket, roomId, name);
+    if (!res.success) {
+      socket.emit('error:msg', res.message);
+    }
+  });
+
+  socket.on('room:settings', ({ traitorModeEnabled }) => {
+    const room = roomManager.getRoomBySocket(socket.id);
+    if (room) {
+      room.updateSettings(socket.id, { traitorModeEnabled });
+    }
+  });
+
+  socket.on('chat:message', ({ text }) => {
+    const room = roomManager.getRoomBySocket(socket.id);
+    if (room) {
+      room.addChatMessage(socket.id, text);
     }
   });
 
   socket.on('game:start', () => {
-    const player = gameState.players.get(socket.id);
-    if (player && player.isHost) {
-      const res = gameState.startGame();
+    const room = roomManager.getRoomBySocket(socket.id);
+    if (room) {
+      const res = room.startGame(socket.id);
       if (!res.success) {
         socket.emit('error:msg', res.message);
       }
@@ -54,32 +80,50 @@ io.on('connection', (socket) => {
   });
 
   socket.on('game:next_phase', () => {
-    const player = gameState.players.get(socket.id);
-    if (player && player.isHost) {
-      if (gameState.status === 'GAME') {
-        gameState.startVotingPhase();
-      } else if (gameState.status === 'VOTING') {
-        gameState.processVotingResults();
-      }
+    const room = roomManager.getRoomBySocket(socket.id);
+    if (room) {
+      room.forceNextPhase(socket.id);
     }
   });
 
   socket.on('card:reveal', ({ category }) => {
-    gameState.revealCard(socket.id, category);
+    const room = roomManager.getRoomBySocket(socket.id);
+    if (room) {
+      room.revealCard(socket.id, category);
+    }
   });
 
   socket.on('card:action', ({ category, targetId }) => {
-    gameState.useSpecialCard(socket.id, category, targetId);
+    const room = roomManager.getRoomBySocket(socket.id);
+    if (room) {
+      room.useSpecialCard(socket.id, category, targetId);
+    }
   });
 
   socket.on('vote:cast', ({ targetId }) => {
-    gameState.castVote(socket.id, targetId);
+    const room = roomManager.getRoomBySocket(socket.id);
+    if (room) {
+      room.castVote(socket.id, targetId);
+    }
+  });
+
+  socket.on('voice:signal', ({ targetId, signal }) => {
+    io.to(targetId).emit('voice:signal', {
+      senderId: socket.id,
+      signal
+    });
+  });
+
+  socket.on('voice:speaking', ({ isSpeaking }) => {
+    const room = roomManager.getRoomBySocket(socket.id);
+    if (room) {
+      room.broadcastSpeaking(socket.id, isSpeaking);
+    }
   });
 
   socket.on('disconnect', () => {
     console.log(`[Socket] Игрок отключился: ${socket.id}`);
-    gameState.removePlayer(socket.id);
-    gameState.broadcastState();
+    roomManager.handleDisconnect(socket.id);
   });
 });
 
