@@ -1,4 +1,12 @@
-const socket = io();
+const getBackendUrl = () => {
+  if (window.BACKEND_URL) return window.BACKEND_URL;
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:3000';
+  }
+  return window.location.origin;
+};
+
+const socket = io(getBackendUrl());
 
 const SocketHandler = {
   createRoom(name) {

@@ -1,0 +1,8 @@
+{
+  "name": "bunker-game-frontend",
+  "version": "1.0.0",
+  "description": "Bunker online game frontend for Vercel",
+  "scripts": {
+    "start": "npx serve ."
+  }
+}

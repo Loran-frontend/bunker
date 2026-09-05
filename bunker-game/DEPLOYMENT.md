@@ -1,50 +1,47 @@
 # 🚀 Инструкция по деплою проекта «Бункер Онлайн»
 
-Данная инструкция описывает процесс бесплатного развертывания проекта «Бункер»:
-- **Бэкенд (Node.js + Socket.io)** — разворачивается на **Render.com** или **Koyeb** (поддерживают постоянные WebSocket-соединения).
-- **Фронтенд (HTML / JS / CSS)** — разворачивается на **Vercel** (быстрый бесплатный хостинг статических сайтов).
+Проект разделен на две части:
+- **`backend/`** — сервер на Node.js + Express + Socket.io
+- **`frontend/`** — клиентская часть (HTML / JS / Tailwind CSS)
 
 ---
 
-## 1. Развертывание Бэкенда (на Render.com)
+## 1. Развертывание Бэкенда (`backend/`) на Render.com
 
-1. **Создайте репозиторий на GitHub** и загрузите туда ваш код.
-2. Зайдите на [Render.com](https://render.com) и войдите через GitHub.
-3. Нажмите **New +** -> **Web Service**.
-4. Подключите ваш GitHub-репозиторий и укажите папку проекта (если проект в подпапке `bunker-game`, укажите **Root Directory**: `bunker-game`).
-5. Настройте параметры службы:
-   - **Name:** `bunker-backend` (или любое ваше имя)
+1. Загрузите репозиторий на **GitHub**.
+2. Зайдите на [Render.com](https://render.com) и создайте **New Web Service**.
+3. Подключите ваш GitHub-репозиторий.
+4. В настройках службы укажите:
+   - **Root Directory:** `bunker-game/backend` (или `backend`)
    - **Environment:** `Node`
    - **Build Command:** `npm install`
    - **Start Command:** `npm start`
-6. Перейдите в раздел **Environment Variables** (Переменные окружения) и добавьте:
-   - `CLIENT_ORIGIN` = `https://ваш-фронтенд-на-vercel.vercel.app` (URL вашего фронтенда на Vercel или `*`)
+5. В разделе **Environment Variables** (Переменные окружения) добавьте:
+   - `CLIENT_ORIGIN` = `https://ваш-проект.vercel.app` (URL фронтенда Vercel)
    - `ENABLE_AI_FINALE` = `true`
    - `GEMINI_API_KEY` = `ваш_ключ_google_gemini` (или `GROQ_API_KEY`)
-7. Нажмите **Create Web Service**.
-8. Скопируйте созданный URL бэкенда (например: `https://bunker-backend.onrender.com`).
+6. Нажмите **Create Web Service** и скопируйте созданный URL (например: `https://bunker-backend.onrender.com`).
 
 ---
 
-## 2. Развертывание Фронтенда (на Vercel)
+## 2. Развертывание Фронтенда (`frontend/`) на Vercel
 
-1. Зайдите на [Vercel.com](https://vercel.com) и авторизуйтесь через GitHub.
-2. Нажмите **Add New...** -> **Project**.
-3. Выберите ваш репозиторий GitHub.
-4. В настройках проекта (**Project Settings**):
+1. Зайдите на [Vercel.com](https://vercel.com) и нажмите **Add New...** -> **Project**.
+2. Выберите ваш GitHub-репозиторий.
+3. В настройках проекта (**Project Settings**):
+   - **Root Directory:** `bunker-game/frontend` (или `frontend`)
    - **Framework Preset:** `Other`
-   - **Root Directory:** `bunker-game` (если проект находится в папке `bunker-game`)
-   - **Output Directory:** `public`
-5. В `public/js/socket-handler.js` сервер автоматически подключается к адресу бэкенда. Если бэкенд развернут на другом домене (Render/Koyeb), вы можете указать URL бэкенда при вызове `io("https://bunker-backend.onrender.com")` или передать адрес.
-6. Нажмите **Deploy**.
-7. После завершения деплоя Vercel выдаст готовый URL вида `https://bunker-online.vercel.app`.
+4. Если фронтенд на Vercel должен подключаться к внешнему бэкенду на Render/Koyeb, укажите адрес бэкенда перед деплоем в `frontend/js/socket-handler.js` или задайте `window.BACKEND_URL = 'https://ваш-бэкенд.onrender.com';` в `index.html`.
+5. Нажмите **Deploy**.
 
 ---
 
-## 3. Проверка работы
+## 3. Локальный запуск (Local Development)
 
-1. Откройте адрес вашего сайта на Vercel в нескольких вкладках браузера или с разных устройств.
-2. Нажмите **«Создать новую комнату»** на одном устройстве.
-3. Скопируйте код комнаты (например, `BUNK-4021`).
-4. На других устройствах введите никнейм, укажите код комнаты и нажмите **«Войти»**.
-5. Наслаждайтесь игрой в «Бункер» с поддержкой голосового чата, секретного предателя и AI-финала!
+Запуск бэкенда:
+```bash
+cd bunker-game/backend
+npm install
+npm start
+```
+Сервер запустится на `http://localhost:3000`. Фронтенд автоматически подключится к локальному бэкенду.

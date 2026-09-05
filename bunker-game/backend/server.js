@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const os = require('os');
 const path = require('path');
+const fs = require('fs');
 const RoomManager = require('./src/logic/RoomManager');
 
 const app = express();
@@ -18,7 +19,10 @@ const io = new Server(server, {
   }
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+const frontendPath = path.join(__dirname, '../frontend');
+if (fs.existsSync(frontendPath)) {
+  app.use(express.static(frontendPath));
+}
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
@@ -136,8 +140,8 @@ if (require.main === module) {
     console.log('====================================================');
     console.log('   🔥 ПОСТАПОКАЛИПТИЧЕСКАЯ ВЕБ-ИГРА «БУНКЕР» 🔥     ');
     console.log('====================================================');
-    console.log(` Сервер запущен на хосте: ${HOST}:${PORT}`);
-    console.log(` 🌐 Игра доступна по адресу: http://${LOCAL_IP}:${PORT}`);
+    console.log(` Бэкенд запущен на хосте: ${HOST}:${PORT}`);
+    console.log(` 🌐 Сервер доступен по адресу: http://${LOCAL_IP}:${PORT}`);
     console.log('====================================================');
   });
 }
