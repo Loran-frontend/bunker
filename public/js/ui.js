@@ -15,6 +15,7 @@ const UI = {
   currentState: null,
   selectedCategoryForAction: null,
   speakingPlayers: new Set(),
+  hasVotedThisRound: false, // Флаг: проголосовал ли текущий игрок в этом раунде
 
   init() {
     this.setupMobileTabs();
@@ -46,6 +47,11 @@ const UI = {
   },
 
   updateGameState(state) {
+    // Если фаза сменилась не на VOTING, сбрасываем локальный статус голосования
+    if (state.status !== "VOTING") {
+      this.hasVotedThisRound = false;
+    }
+
     this.currentState = state;
 
     if (window.VoiceChat) {
@@ -261,6 +267,15 @@ const UI = {
     modal.classList.remove("hidden");
   },
 
+  handleVoteClick(targetId) {
+    this.hasVotedThisRound = true;
+    SocketHandler.castVote(targetId);
+    if (this.currentState) {
+      const me = this.currentState.players.find((p) => p.id === socket.id);
+      this.renderPlayersList(this.currentState.players, me, this.currentState);
+    }
+  },
+
   renderPlayersList(players, me, state) {
     const list = document.getElementById("players-list");
     list.innerHTML = "";
@@ -275,7 +290,9 @@ const UI = {
         state.status === "VOTING" &&
         me &&
         !me.eliminated &&
-        !p.eliminated;
+        !p.eliminated &&
+        !this.hasVotedThisRound; // Кнопки видны только если текущий игрок ЕЩЕ НЕ проголосовал
+
       const isSpeaking = this.speakingPlayers.has(p.id);
 
       const pEl = document.createElement("div");
@@ -305,7 +322,7 @@ const UI = {
 
       let voteBtnHtml = "";
       if (isVoting && !isSelf) {
-        voteBtnHtml = `<button onclick="SocketHandler.castVote('${p.id}')" class="px-2 py-1 bg-red-700 hover:bg-red-600 font-bold text-white rounded text-[10px]">Голосовать</button>`;
+        voteBtnHtml = `<button onclick="UI.handleVoteClick('${p.id}')" class="px-2 py-1 bg-red-700 hover:bg-red-600 font-bold text-white rounded text-[10px]">Голосовать</button>`;
       }
 
       pEl.innerHTML = `
