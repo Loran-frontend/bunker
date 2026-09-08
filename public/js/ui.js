@@ -1,14 +1,14 @@
 const categoryNames = {
-  professions: 'Профессия',
-  health: 'Здоровье',
-  biology: 'Биология / Пол',
-  inventory: 'Инвентарь',
-  backpack: 'Рюкзак',
-  phobias: 'Фобия',
-  skills: 'Навык (Доп. 1)',
-  hobbies: 'Хобби (Доп. 2)',
-  special1: 'Спец-карта #1',
-  special2: 'Спец-карта #2'
+  professions: "Профессия",
+  health: "Здоровье",
+  biology: "Биология",
+  inventory: "Инвентарь",
+  backpack: "Рюкзак",
+  phobias: "Фобия",
+  skills: "Навык",
+  hobbies: "Хобби",
+  special1: "Спец-карта #1",
+  special2: "Спец-карта #2",
 };
 
 const UI = {
@@ -21,24 +21,24 @@ const UI = {
   },
 
   setupMobileTabs() {
-    const btns = document.querySelectorAll('.mobile-nav-btn');
-    btns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        btns.forEach(b => {
-          b.classList.remove('active');
-          b.classList.replace('text-amber-500', 'text-gray-400');
+    const btns = document.querySelectorAll(".mobile-nav-btn");
+    btns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        btns.forEach((b) => {
+          b.classList.remove("active");
+          b.classList.replace("text-amber-500", "text-gray-400");
         });
-        btn.classList.add('active');
-        btn.classList.replace('text-gray-400', 'text-amber-500');
+        btn.classList.add("active");
+        btn.classList.replace("text-gray-400", "text-amber-500");
 
-        const targetTab = btn.getAttribute('data-tab');
-        document.querySelectorAll('.tab-content').forEach(content => {
+        const targetTab = btn.getAttribute("data-tab");
+        document.querySelectorAll(".tab-content").forEach((content) => {
           if (content.id === targetTab) {
-            content.classList.remove('hidden');
-            content.classList.add('flex');
+            content.classList.remove("hidden");
+            content.classList.add("flex");
           } else {
-            content.classList.add('hidden');
-            content.classList.remove('flex');
+            content.classList.add("hidden");
+            content.classList.remove("flex");
           }
         });
       });
@@ -53,121 +53,143 @@ const UI = {
       window.VoiceChat.updateDefenseSpeechMuting(state);
     }
 
-    const codeBadge = document.getElementById('room-code-badge');
+    const codeBadge = document.getElementById("room-code-badge");
     if (state.roomId) {
       codeBadge.innerText = `Код: ${state.roomId}`;
-      codeBadge.classList.remove('hidden');
+      codeBadge.classList.remove("hidden");
     }
 
-    const badge = document.getElementById('phase-badge');
-    if (state.status === 'LOBBY') badge.innerText = `Лобби (${state.players.length}/16)`;
-    else if (state.status === 'REVEAL') badge.innerText = `Раунд ${state.round}: Раскрытие карт`;
-    else if (state.status === 'DISCUSSION') badge.innerText = `Раунд ${state.round}: Дискуссия`;
-    else if (state.status === 'VOTING') badge.innerText = `Раунд ${state.round}: Голосование`;
-    else if (state.status === 'DEFENSE') badge.innerText = `Защитная речь (30 сек)`;
-    else if (state.status === 'GAME_OVER') badge.innerText = 'Игра Завершена';
+    const badge = document.getElementById("phase-badge");
+    if (state.status === "LOBBY")
+      badge.innerText = `Лобби (${state.players.length}/16)`;
+    else if (state.status === "REVEAL")
+      badge.innerText = `Раунд ${state.round}: Раскрытие карт`;
+    else if (state.status === "DISCUSSION")
+      badge.innerText = `Раунд ${state.round}: Дискуссия`;
+    else if (state.status === "VOTING")
+      badge.innerText = `Раунд ${state.round}: Голосование`;
+    else if (state.status === "DEFENSE")
+      badge.innerText = `Защитная речь (30 сек)`;
+    else if (state.status === "GAME_OVER") badge.innerText = "Игра Завершена";
 
     const isHost = socket.id === state.hostId;
-    const startBtn = document.getElementById('host-start-btn');
-    const nextBtn = document.getElementById('host-next-btn');
+    const startBtn = document.getElementById("host-start-btn");
+    const nextBtn = document.getElementById("host-next-btn");
 
-    if (isHost && state.status === 'LOBBY') {
-      startBtn.classList.remove('hidden');
+    if (isHost && state.status === "LOBBY") {
+      startBtn.classList.remove("hidden");
     } else {
-      startBtn.classList.add('hidden');
+      startBtn.classList.add("hidden");
     }
 
-    if (isHost && state.status !== 'LOBBY' && state.status !== 'GAME_OVER') {
-      nextBtn.classList.remove('hidden');
+    if (isHost && state.status !== "LOBBY" && state.status !== "GAME_OVER") {
+      nextBtn.classList.remove("hidden");
     } else {
-      nextBtn.classList.add('hidden');
+      nextBtn.classList.add("hidden");
     }
 
     // Host Settings Panel
-    const hostPanel = document.getElementById('host-settings-panel');
-    if (isHost && state.status === 'LOBBY') {
-      hostPanel.classList.remove('hidden');
-      const toggle = document.getElementById('traitor-toggle');
+    const hostPanel = document.getElementById("host-settings-panel");
+    if (isHost && state.status === "LOBBY") {
+      hostPanel.classList.remove("hidden");
+      const toggle = document.getElementById("traitor-toggle");
       if (toggle) toggle.checked = !!state.traitorModeEnabled;
     } else {
-      hostPanel.classList.add('hidden');
+      hostPanel.classList.add("hidden");
     }
 
-    const timerBox = document.getElementById('timer-box');
-    if (state.status === 'DISCUSSION' || state.status === 'VOTING' || state.status === 'DEFENSE') {
-      timerBox.classList.remove('hidden');
+    const timerBox = document.getElementById("timer-box");
+    if (
+      state.status === "DISCUSSION" ||
+      state.status === "VOTING" ||
+      state.status === "DEFENSE"
+    ) {
+      timerBox.classList.remove("hidden");
     } else {
-      timerBox.classList.add('hidden');
+      timerBox.classList.add("hidden");
     }
 
     if (state.disaster) {
-      document.getElementById('disaster-title').innerText = state.disaster.title;
-      document.getElementById('disaster-desc').innerText = state.disaster.desc;
+      document.getElementById("disaster-title").innerText =
+        state.disaster.title;
+      document.getElementById("disaster-desc").innerText = state.disaster.desc;
     }
     if (state.bunker) {
-      document.getElementById('bunker-title').innerText = state.bunker.title;
-      document.getElementById('bunker-desc').innerText = state.bunker.desc;
-      document.getElementById('bunker-capacity').innerText = `${state.bunkerCapacity} чел.`;
+      document.getElementById("bunker-title").innerText = state.bunker.title;
+      document.getElementById("bunker-desc").innerText = state.bunker.desc;
+      document.getElementById("bunker-capacity").innerText =
+        `${state.bunkerCapacity} чел.`;
     }
 
-    const me = state.players.find(p => p.id === socket.id);
+    const me = state.players.find((p) => p.id === socket.id);
 
     // Traitor banner
-    const traitorBanner = document.getElementById('traitor-banner');
+    const traitorBanner = document.getElementById("traitor-banner");
     if (me && me.isTraitor) {
-      traitorBanner.classList.remove('hidden');
+      traitorBanner.classList.remove("hidden");
     } else {
-      traitorBanner.classList.add('hidden');
+      traitorBanner.classList.add("hidden");
     }
 
     // Turn & Phase Banner
-    const turnBanner = document.getElementById('turn-banner');
-    const turnText = document.getElementById('turn-banner-text');
-    if (state.status === 'REVEAL' && state.activePlayerName) {
-      turnBanner.classList.remove('hidden');
+    const turnBanner = document.getElementById("turn-banner");
+    const turnText = document.getElementById("turn-banner-text");
+    if (state.status === "REVEAL" && state.activePlayerName) {
+      turnBanner.classList.remove("hidden");
       const isMyTurn = state.activePlayerId === socket.id;
-      turnText.innerText = isMyTurn ? '👉 ВАШ ХОД! Выберите и откройте 1 характеристику ниже.' : `⏳ Ход игрока ${state.activePlayerName} (открывает карту)...`;
-    } else if (state.status === 'DEFENSE' && state.defenseSpeakerId) {
-      turnBanner.classList.remove('hidden');
-      const speaker = state.players.find(p => p.id === state.defenseSpeakerId);
+      turnText.innerText = isMyTurn
+        ? "👉 ВАШ ХОД! Выберите и откройте 1 характеристику ниже."
+        : `⏳ Ход игрока ${state.activePlayerName} (открывает карту)...`;
+    } else if (state.status === "DEFENSE" && state.defenseSpeakerId) {
+      turnBanner.classList.remove("hidden");
+      const speaker = state.players.find(
+        (p) => p.id === state.defenseSpeakerId,
+      );
       const isMySpeech = state.defenseSpeakerId === socket.id;
-      turnText.innerText = isMySpeech ? '🎙️ ВАША ЗАЩИТНАЯ РЕЧЬ! (30 сек)' : `🎙️ Защитная речь: ${speaker?.name || 'Кандидат'} (остальные микрофоны приглушены)`;
+      turnText.innerText = isMySpeech
+        ? "🎙️ ВАША ЗАЩИТНАЯ РЕЧЬ! (30 сек)"
+        : `🎙️ Защитная речь: ${speaker?.name || "Кандидат"} (остальные микрофоны приглушены)`;
     } else {
-      turnBanner.classList.add('hidden');
+      turnBanner.classList.add("hidden");
     }
 
     this.renderMyCards(me, state);
     this.renderPlayersList(state.players, me, state);
     this.renderLogs(state.logs);
 
-    if (state.status === 'GAME_OVER' && state.finaleResult) {
+    if (state.status === "GAME_OVER" && state.finaleResult) {
       this.showFinaleModal(state.finaleResult);
     }
   },
 
   renderMyCards(me, state) {
-    const grid = document.getElementById('my-cards-grid');
-    grid.innerHTML = '';
+    const grid = document.getElementById("my-cards-grid");
+    grid.innerHTML = "";
 
     if (!me || !me.cards) {
-      grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">Ожидание раздачи карт...</div>';
+      grid.innerHTML =
+        '<div class="col-span-full text-center text-gray-500 py-8">Ожидание раздачи карт...</div>';
       return;
     }
 
-    const isMyTurnToReveal = state && state.status === 'REVEAL' && state.activePlayerId === socket.id;
-    const isDiscussionOrVoting = state && (state.status === 'DISCUSSION' || state.status === 'VOTING');
+    const isMyTurnToReveal =
+      state && state.status === "REVEAL" && state.activePlayerId === socket.id;
+    const isDiscussionOrVoting =
+      state && (state.status === "DISCUSSION" || state.status === "VOTING");
 
-    Object.keys(me.cards).forEach(cat => {
+    Object.keys(me.cards).forEach((cat) => {
       const card = me.cards[cat];
-      const cardEl = document.createElement('div');
+      const cardEl = document.createElement("div");
       const isRevealed = card.revealed;
-      const isSpecial = cat === 'special1' || cat === 'special2';
+      const isSpecial = cat === "special1" || cat === "special2";
 
       cardEl.className = `card-item border rounded-lg p-2.5 flex flex-col justify-between text-xs transition duration-200 ${
-        isRevealed ? 'bg-gray-800/90 border-amber-600/70' : 'bg-gray-950 border-gray-800 hover:border-gray-700'
+        isRevealed
+          ? "bg-gray-800/90 border-amber-600/70"
+          : "bg-gray-950 border-gray-800 hover:border-gray-700"
       }`;
 
-      let actionsHtml = '';
+      let actionsHtml = "";
       if (!isRevealed) {
         if (isSpecial) {
           if (isDiscussionOrVoting) {
@@ -190,7 +212,7 @@ const UI = {
         <div>
           <div class="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-1">${categoryNames[cat] || cat}</div>
           <div class="font-bold text-amber-400 text-xs leading-snug mb-1">${card.value}</div>
-          ${card.details && card.details.desc ? `<p class="text-[10px] text-gray-400 italic">${card.details.desc}</p>` : ''}
+          ${card.details && card.details.desc ? `<p class="text-[10px] text-gray-400 italic">${card.details.desc}</p>` : ""}
         </div>
         ${actionsHtml}
       `;
@@ -201,78 +223,95 @@ const UI = {
 
   handleSpecialCardClick(cat) {
     this.selectedCategoryForAction = cat;
-    const me = this.currentState.players.find(p => p.id === socket.id);
+    const me = this.currentState.players.find((p) => p.id === socket.id);
     if (!me || !me.cards || !me.cards[cat]) return;
 
     const action = me.cards[cat].details ? me.cards[cat].details.action : null;
 
-    if (action === 'double_vote' || action === 'immunity') {
+    if (action === "double_vote" || action === "immunity") {
       SocketHandler.useCardAction(cat, socket.id);
       return;
     }
 
-    const modal = document.getElementById('action-modal');
-    const targetList = document.getElementById('action-target-list');
-    targetList.innerHTML = '';
+    const modal = document.getElementById("action-modal");
+    const targetList = document.getElementById("action-target-list");
+    targetList.innerHTML = "";
 
-    const otherAlivePlayers = this.currentState.players.filter(p => !p.eliminated && p.id !== socket.id);
+    const otherAlivePlayers = this.currentState.players.filter(
+      (p) => !p.eliminated && p.id !== socket.id,
+    );
 
     if (otherAlivePlayers.length === 0) {
-      alert('Нет других доступных игроков для применения способности!');
+      alert("Нет других доступных игроков для применения способности!");
       return;
     }
 
-    otherAlivePlayers.forEach(p => {
-      const btn = document.createElement('button');
-      btn.className = 'w-full py-2 bg-gray-700 hover:bg-amber-600 hover:text-black rounded text-sm text-gray-200 font-medium transition';
+    otherAlivePlayers.forEach((p) => {
+      const btn = document.createElement("button");
+      btn.className =
+        "w-full py-2 bg-gray-700 hover:bg-amber-600 hover:text-black rounded text-sm text-gray-200 font-medium transition";
       btn.innerText = p.name;
       btn.onclick = () => {
         SocketHandler.useCardAction(cat, p.id);
-        modal.classList.add('hidden');
+        modal.classList.add("hidden");
       };
       targetList.appendChild(btn);
     });
 
-    modal.classList.remove('hidden');
+    modal.classList.remove("hidden");
   },
 
   renderPlayersList(players, me, state) {
-    const list = document.getElementById('players-list');
-    list.innerHTML = '';
+    const list = document.getElementById("players-list");
+    list.innerHTML = "";
 
-    document.getElementById('players-count').innerText = `${players.filter(p => !p.eliminated).length} / ${players.length}`;
+    document.getElementById("players-count").innerText =
+      `${players.filter((p) => !p.eliminated).length} / ${players.length}`;
 
-    players.forEach(p => {
+    players.forEach((p) => {
       const isSelf = p.id === socket.id;
-      const isVoting = state && state.status === 'VOTING' && me && !me.eliminated && !p.eliminated;
+      const isVoting =
+        state &&
+        state.status === "VOTING" &&
+        me &&
+        !me.eliminated &&
+        !p.eliminated;
       const isSpeaking = this.speakingPlayers.has(p.id);
 
-      const pEl = document.createElement('div');
+      const pEl = document.createElement("div");
       pEl.className = `p-2.5 rounded-lg border text-xs space-y-1.5 transition-all ${
-        p.eliminated ? 'bg-red-950/20 border-red-900/40 opacity-60' :
-        isSpeaking ? 'bg-amber-950/40 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' :
-        isSelf ? 'bg-amber-950/20 border-amber-600/60' : 'bg-gray-800/60 border-gray-700'
+        p.eliminated
+          ? "bg-red-950/20 border-red-900/40 opacity-60"
+          : isSpeaking
+            ? "bg-amber-950/40 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+            : isSelf
+              ? "bg-amber-950/20 border-amber-600/60"
+              : "bg-gray-800/60 border-gray-700"
       }`;
 
-      let cardsHtml = '';
+      let cardsHtml = "";
       if (p.cards) {
-        cardsHtml = Object.keys(p.cards).map(cat => {
-          const card = p.cards[cat];
-          return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] ${
-            card.revealed ? 'bg-amber-900/40 text-amber-300 border border-amber-700/50' : 'bg-gray-900 text-gray-500'
-          }">${categoryNames[cat]}: ${card.value}</span>`;
-        }).join(' ');
+        cardsHtml = Object.keys(p.cards)
+          .map((cat) => {
+            const card = p.cards[cat];
+            return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] ${
+              card.revealed
+                ? "bg-amber-900/40 text-amber-300 border border-amber-700/50"
+                : "bg-gray-900 text-gray-500"
+            }">${categoryNames[cat]}: ${card.value}</span>`;
+          })
+          .join(" ");
       }
 
-      let voteBtnHtml = '';
+      let voteBtnHtml = "";
       if (isVoting && !isSelf) {
         voteBtnHtml = `<button onclick="SocketHandler.castVote('${p.id}')" class="px-2 py-1 bg-red-700 hover:bg-red-600 font-bold text-white rounded text-[10px]">Голосовать</button>`;
       }
 
       pEl.innerHTML = `
         <div class="flex items-center justify-between">
-          <span class="font-bold text-sm ${p.eliminated ? 'line-through text-red-500' : 'text-gray-200'}">
-            ${isSpeaking ? '🗣️ ' : ''}${p.name} ${p.isHost ? '👑' : ''} ${isSelf ? '(Вы)' : ''}
+          <span class="font-bold text-sm ${p.eliminated ? "line-through text-red-500" : "text-gray-200"}">
+            ${isSpeaking ? "🗣️ " : ""}${p.name} ${p.isHost ? "👑" : ""} ${isSelf ? "(Вы)" : ""}
           </span>
           <div class="flex items-center space-x-2">
             <span id="vote-count-${p.id}" class="text-xs font-bold text-red-400"></span>
@@ -295,14 +334,14 @@ const UI = {
       this.speakingPlayers.delete(playerId);
     }
     if (this.currentState) {
-      const me = this.currentState.players.find(p => p.id === socket.id);
+      const me = this.currentState.players.find((p) => p.id === socket.id);
       this.renderPlayersList(this.currentState.players, me, this.currentState);
     }
   },
 
   updateVoteCounts(voteCounts) {
     if (!voteCounts) return;
-    Object.keys(voteCounts).forEach(targetId => {
+    Object.keys(voteCounts).forEach((targetId) => {
       const badge = document.getElementById(`vote-count-${targetId}`);
       if (badge) {
         badge.innerText = `🗳️ ${voteCounts[targetId]}`;
@@ -311,49 +350,53 @@ const UI = {
   },
 
   updateTimer(timeLeft) {
-    const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-    const secs = (timeLeft % 60).toString().padStart(2, '0');
-    document.getElementById('timer-text').innerText = `${mins}:${secs}`;
+    const mins = Math.floor(timeLeft / 60)
+      .toString()
+      .padStart(2, "0");
+    const secs = (timeLeft % 60).toString().padStart(2, "0");
+    document.getElementById("timer-text").innerText = `${mins}:${secs}`;
   },
 
   showPrivateModal(title, message) {
-    document.getElementById('private-modal-title').innerText = title;
-    document.getElementById('private-modal-body').innerText = message;
-    document.getElementById('private-modal').classList.remove('hidden');
+    document.getElementById("private-modal-title").innerText = title;
+    document.getElementById("private-modal-body").innerText = message;
+    document.getElementById("private-modal").classList.remove("hidden");
   },
 
   showFinaleModal(result) {
     if (!result) return;
-    const modal = document.getElementById('finale-modal');
-    const title = document.getElementById('finale-title');
-    const outcome = document.getElementById('finale-outcome');
-    const body = document.getElementById('finale-body');
+    const modal = document.getElementById("finale-modal");
+    const title = document.getElementById("finale-title");
+    const outcome = document.getElementById("finale-outcome");
+    const body = document.getElementById("finale-body");
 
     if (result.victory) {
-      outcome.className = 'text-sm font-bold px-3 py-1.5 rounded-lg inline-block mx-auto bg-emerald-950 border border-emerald-500 text-emerald-300';
-      outcome.innerText = '🎉 ПОБЕДА ВЫЖИВШИХ! (Бункер выжил)';
+      outcome.className =
+        "text-sm font-bold px-3 py-1.5 rounded-lg inline-block mx-auto bg-emerald-950 border border-emerald-500 text-emerald-300";
+      outcome.innerText = "🎉 ПОБЕДА ВЫЖИВШИХ! (Бункер выжил)";
     } else {
-      outcome.className = 'text-sm font-bold px-3 py-1.5 rounded-lg inline-block mx-auto bg-red-950 border border-red-500 text-red-300';
-      outcome.innerText = '💥 ПОБЕДА САБОТАЖНИКА! (Бункер потерпел крах)';
+      outcome.className =
+        "text-sm font-bold px-3 py-1.5 rounded-lg inline-block mx-auto bg-red-950 border border-red-500 text-red-300";
+      outcome.innerText = "💥 ПОБЕДА САБОТАЖНИКА! (Бункер потерпел крах)";
     }
 
-    body.innerText = result.story || 'Итоги подведены.';
-    modal.classList.remove('hidden');
+    body.innerText = result.story || "Итоги подведены.";
+    modal.classList.remove("hidden");
   },
 
   renderLogs(logs) {
-    const logContainer = document.getElementById('game-logs');
+    const logContainer = document.getElementById("game-logs");
     if (!logContainer) return;
-    logContainer.innerHTML = logs.map(l => `<div>${l}</div>`).join('');
+    logContainer.innerHTML = logs.map((l) => `<div>${l}</div>`).join("");
     logContainer.scrollTop = logContainer.scrollHeight;
   },
 
   appendLog(logMessage) {
-    const logContainer = document.getElementById('game-logs');
+    const logContainer = document.getElementById("game-logs");
     if (!logContainer) return;
-    const div = document.createElement('div');
+    const div = document.createElement("div");
     div.innerText = logMessage;
     logContainer.appendChild(div);
     logContainer.scrollTop = logContainer.scrollHeight;
-  }
+  },
 };

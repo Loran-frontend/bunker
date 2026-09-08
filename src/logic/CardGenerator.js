@@ -1,4 +1,4 @@
-const cardsData = require('../data/cardsData');
+const cardsData = require("../data/cardsData");
 
 class CardGenerator {
   constructor() {
@@ -16,7 +16,7 @@ class CardGenerator {
       skills: [...cardsData.skills],
       hobbies: [...cardsData.hobbies],
       special1: [...cardsData.special1],
-      special2: [...cardsData.special2]
+      special2: [...cardsData.special1],
     };
   }
 
@@ -30,18 +30,26 @@ class CardGenerator {
 
   generatePlayerCards() {
     const categories = [
-      'professions', 'health', 'biology', 'inventory', 'backpack',
-      'phobias', 'skills', 'hobbies', 'special1', 'special2'
+      "professions",
+      "health",
+      "biology",
+      "inventory",
+      "backpack",
+      "phobias",
+      "skills",
+      "hobbies",
+      "special1",
+      "special2",
     ];
 
     const cards = {};
-    categories.forEach(cat => {
+    categories.forEach((cat) => {
       const item = this.getRandomItem(cat);
       cards[cat] = {
         type: cat,
-        value: typeof item === 'string' ? item : item.name,
-        details: typeof item === 'object' ? item : null,
-        revealed: false
+        value: typeof item === "string" ? item : item.name,
+        details: typeof item === "object" ? item : null,
+        revealed: false,
       };
     });
 
@@ -49,8 +57,12 @@ class CardGenerator {
   }
 
   generateDisasterAndBunker() {
-    const disaster = cardsData.disasters[Math.floor(Math.random() * cardsData.disasters.length)];
-    const bunker = cardsData.bunkers[Math.floor(Math.random() * cardsData.bunkers.length)];
+    const disaster =
+      cardsData.disasters[
+        Math.floor(Math.random() * cardsData.disasters.length)
+      ];
+    const bunker =
+      cardsData.bunkers[Math.floor(Math.random() * cardsData.bunkers.length)];
     return { disaster, bunker };
   }
 }
