@@ -232,31 +232,42 @@ const UI = {
     const me = this.currentState.players.find((p) => p.id === socket.id);
     if (!me || !me.cards || !me.cards[cat]) return;
 
-    const action = me.cards[cat].details ? me.cards[cat].details.action : null;
+    const card = me.cards[cat];
+    const cardName = card.name;
+    const action = card.details ? card.details.action : null;
 
-    if (action === "double_vote" || action === "immunity") {
+    // Карты, применяемые мгновенно только на себя
+    const selfOnlyCards = [
+      "Иммунитет",
+      "Щит бункера",
+      "Амнистия",
+      "Запретная зона",
+      "Второстепенный маневр",
+      "Двойной голос",
+      "Провокация",
+      "Голос народа",
+      "Перетасовка",
+    ];
+
+    if (selfOnlyCards.includes(cardName)) {
       SocketHandler.useCardAction(cat, socket.id);
       return;
     }
 
+    // Для остальных карт открываем модальное окно выбора цели (включая себя для Лечения)
     const modal = document.getElementById("action-modal");
     const targetList = document.getElementById("action-target-list");
     targetList.innerHTML = "";
 
-    const otherAlivePlayers = this.currentState.players.filter(
-      (p) => !p.eliminated && p.id !== socket.id,
+    const availableTargets = this.currentState.players.filter(
+      (p) => !p.eliminated,
     );
 
-    if (otherAlivePlayers.length === 0) {
-      alert("Нет других доступных игроков для применения способности!");
-      return;
-    }
-
-    otherAlivePlayers.forEach((p) => {
+    availableTargets.forEach((p) => {
       const btn = document.createElement("button");
       btn.className =
-        "w-full py-2 bg-gray-700 hover:bg-amber-600 hover:text-black rounded text-sm text-gray-200 font-medium transition";
-      btn.innerText = p.name;
+        "w-full py-2 bg-gray-700 hover:bg-amber-600 hover:text-black rounded text-sm text-gray-200 font-medium transition mb-1";
+      btn.innerText = p.id === socket.id ? `${p.name} (На себя)` : p.name;
       btn.onclick = () => {
         SocketHandler.useCardAction(cat, p.id);
         modal.classList.add("hidden");

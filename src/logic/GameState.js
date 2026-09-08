@@ -729,138 +729,162 @@ ${hasTraitor ? "Так как предатель попал в бункер, о�
 
     const card = player.cards[category];
     if (card.revealed) {
-      this.io.to(socketId).emit("action:private", {
-        title: "Ошибка",
-        message: "Спец-карта уже использована!",
-      });
+      this.io
+        .to(socketId)
+        .emit("action:private", {
+          title: "Ошибка",
+          message: "Спец-карта уже использована!",
+        });
       return;
     }
 
-    const action = card.details ? card.details.action : null;
-    const requiresTarget = [
-      "spy",
-      "swap_inventory",
-      "swap_backpack",
-      "cancel_vote",
-      "force_reveal",
-      "cure_health",
-      "cure_phobia",
-    ].includes(action);
+    const cardName = card.name;
+    const target = this.players.get(targetId);
 
-    if (requiresTarget && targetId === socketId) {
-      this.io.to(socketId).emit("action:private", {
-        title: "Ошибка",
-        message: "Эту способность нельзя применять на самого себя!",
-      });
+    // Запрет на выбор себя только для карт, требующих чужую цель
+    const selfTargetForbidden = [
+      "Обмен инвентарем",
+      "Обмен рюкзаками",
+      "Кража рюкзака",
+      "Конфискация",
+      "Аннулирование голоса",
+      "Гипноз",
+      "Карантин",
+    ].includes(cardName);
+    if (selfTargetForbidden && targetId === socketId) {
+      this.io
+        .to(socketId)
+        .emit("action:private", {
+          title: "Ошибка",
+          message: "Эту способность нельзя применять на себя!",
+        });
       return;
     }
 
     card.revealed = true;
-    const target = this.players.get(targetId);
-
     this.addLog(`⚡ Игрок ${player.name} применил спец-карту "${card.value}"!`);
 
-    if (action === "spy" && target) {
-      const targetCards = target.cards;
-      const unrevealedCats = Object.keys(targetCards).filter(
-        (c) => !targetCards[c].revealed,
+    // --- ТОЧНАЯ ЛОГИКА ДЕЙСТВИЙ ---
+
+    // 1. ШПИОНАЖ И ПРОВЕРКИ
+    if (cardName === "Рентген") {
+      // В UI нужно передавать массив из 2 targetId, либо берем целевого и следующего живого
+      const alive = this.getAlivePlayers().filter((p) => p.id !== socketId);
+      const targets = alive.slice(0, 2);
+      const info = targets
+        .map((t) => `${t.name}: Здоровье — [${t.cards.health.value}]`)
+        .join("\n");
+      this.io
+        .to(socketId)
+        .emit("action:private", { title: "🔬 Рентген", message: info });
+    } else if (cardName === "Обыск") {
+      if (!target) return;
+      const cardsInfo = Object.entries(target.cards)
+        .map(([cat, c]) => `${cat.toUpperCase()}: ${c.value}`)
+        .join("\n");
+      this.io
+        .to(socketId)
+        .emit("action:private", {
+          title: `🔍 Обыск: ${target.name}`,
+          message: cardsInfo,
+        });
+    } else if (cardName === "Шпионский досмотр") {
+      if (!target) return;
+      const msg = `Здоровье: ${target.cards.health.value}\nБиология: ${target.cards.biology.value}`;
+      this.io
+        .to(socketId)
+        .emit("action:private", {
+          title: `🕵️ Досмотр: ${target.name}`,
+          message: msg,
+        });
+    } else if (cardName === "Детектив") {
+      if (!target) return;
+      const spec2 = target.cards.special2
+        ? target.cards.special2.value
+        : "Отсутствует";
+      this.io
+        .to(socketId)
+        .emit("action:private", {
+          title: `🕵️ Детектив: ${target.name}`,
+          message: `Спец-карта #2: ${spec2}`,
+        });
+    } else if (cardName === "Сканер") {
+      if (!target) return;
+      this.io
+        .to(socketId)
+        .emit("action:private", {
+          title: `📡 Сканер: ${target.name}`,
+          message: `Инвентарь: ${target.cards.inventory.value}`,
+        });
+    } else if (cardName === "Шпион") {
+      if (!target) return;
+      const unrevealed = Object.keys(target.cards).filter(
+        (c) => !target.cards[c].revealed,
       );
       const chosenCat =
-        unrevealedCats.length > 0
-          ? unrevealedCats[Math.floor(Math.random() * unrevealedCats.length)]
+        unrevealed.length > 0
+          ? unrevealed[Math.floor(Math.random() * unrevealed.length)]
           : "health";
-      const spyCard = targetCards[chosenCat];
+      this.io
+        .to(socketId)
+        .emit("action:private", {
+          title: `🕵️ Шпион: ${target.name}`,
+          message: `Карта [${chosenCat.toUpperCase()}]: ${target.cards[chosenCat].value}`,
+        });
 
-      this.io.to(socketId).emit("action:private", {
-        title: `🕵️ Шпионаж: ${target.name}`,
-        message: `Карта [${chosenCat.toUpperCase()}]: ${spyCard.value}${spyCard.details ? " (" + (spyCard.details.desc || spyCard.details) + ")" : ""}`,
-      });
-
-      this.io.to(target.id).emit("action:private", {
-        title: "⚠️ Против вас применена способность!",
-        message: `Игрок ${player.name} применил спец-карту "Шпионаж" и тайно подглядел одну из ваших карт!`,
-      });
-    } else if (action === "swap_inventory" && target) {
-      const temp = player.cards.inventory;
-      player.cards.inventory = target.cards.inventory;
-      target.cards.inventory = temp;
-      this.addLog(
-        `Игрок ${player.name} поменялся инвентарем с ${target.name}!`,
-      );
-
-      this.io.to(target.id).emit("action:private", {
-        title: "⚠️ Против вас применена способность!",
-        message: `Игрок ${player.name} поменялся с вами предметами из инвентаря!`,
-      });
-    } else if (action === "swap_backpack" && target) {
-      const temp = player.cards.backpack;
-      player.cards.backpack = target.cards.backpack;
-      target.cards.backpack = temp;
-      this.addLog(`Игрок ${player.name} поменялся рюкзаком с ${target.name}!`);
-
-      this.io.to(target.id).emit("action:private", {
-        title: "⚠️ Против вас применена способность!",
-        message: `Игрок ${player.name} поменялся с вами рюкзаком!`,
-      });
-    } else if (action === "double_vote") {
+      // 2. ГОЛОСОВАНИЕ И МОДИФИКАТОРЫ
+    } else if (cardName === "Кража голоса") {
+      if (target) {
+        const targetMods = this.specialModifiers.get(target.id);
+        if (targetMods) targetMods.cancelVote = true; // Лишаем целевого игрока голоса
+      }
+      const myMods = this.specialModifiers.get(socketId);
+      if (myMods) myMods.doubleVote = true; // Забираем голос себе
+    } else if (card.details?.action === "double_vote") {
       const mods = this.specialModifiers.get(socketId);
       if (mods) mods.doubleVote = true;
-      this.io.to(socketId).emit("action:private", {
-        title: "Эффект карты",
-        message: "Ваш следующий голос будет посчитан за два!",
-      });
-    } else if (action === "cure_health") {
+    } else if (card.details?.action === "cancel_vote") {
+      if (target) {
+        const mods = this.specialModifiers.get(target.id);
+        if (mods) mods.cancelVote = true;
+      }
+    } else if (card.details?.action === "immunity") {
+      const mods = this.specialModifiers.get(socketId);
+      if (mods) mods.immunity = true;
+
+      // 3. ЛЕЧЕНИЕ И ФОБИИ
+    } else if (card.details?.action === "cure_health") {
       const targetPlayer = target || player;
       targetPlayer.cards.health.value = "Абсолютно здоров (Излечен)";
       targetPlayer.cards.health.revealed = true;
-      this.addLog(`Игрок ${targetPlayer.name} полностью излечен!`);
-
-      if (targetPlayer.id !== socketId) {
-        this.io.to(targetPlayer.id).emit("action:private", {
-          title: "✨ К вам применена способность!",
-          message: `Игрок ${player.name} излечил вас от болезней спец-картой!`,
-        });
-      }
-    } else if (action === "cure_phobia") {
+    } else if (card.details?.action === "cure_phobia") {
       const targetPlayer = target || player;
-      targetPlayer.cards.phobias.value = "Фобия отсутствует (Излечен)";
+      targetPlayer.cards.phobias.value = "Фобия отсутствует (Излечена)";
       targetPlayer.cards.phobias.revealed = true;
-      this.addLog(`Игрок ${targetPlayer.name} избавлен от фобии!`);
 
-      if (targetPlayer.id !== socketId) {
-        this.io.to(targetPlayer.id).emit("action:private", {
-          title: "✨ К вам применена способность!",
-          message: `Игрок ${player.name} избавил вас от фобии спец-картой!`,
-        });
+      // 4. ОБМЕНЫ
+    } else if (cardName === "Перетасовка") {
+      const alive = this.getAlivePlayers();
+      const myIndex = alive.findIndex((p) => p.id === socketId);
+      const leftNeighbor = alive[(myIndex + 1) % alive.length];
+      if (leftNeighbor) {
+        const temp = player.cards.inventory;
+        player.cards.inventory = leftNeighbor.cards.inventory;
+        leftNeighbor.cards.inventory = temp;
+        this.addLog(
+          `Игрок ${player.name} обменялся инвентарем с соседом слева (${leftNeighbor.name})!`,
+        );
       }
-    } else if (action === "cancel_vote" && target) {
-      const mods = this.specialModifiers.get(target.id);
-      if (mods) mods.cancelVote = true;
-      this.addLog(
-        `Игрок ${target.name} лишен права голоса на ближайшем голосовании!`,
-      );
-
-      this.io.to(target.id).emit("action:private", {
-        title: "⚠️ Против вас применена способность!",
-        message: `Игрок ${player.name} лишил вас права голоса в этом раунде!`,
-      });
-    } else if (action === "immunity") {
-      const mods = this.specialModifiers.get(socketId);
-      if (mods) mods.immunity = true;
-      this.io.to(socketId).emit("action:private", {
-        title: "Иммунитет",
-        message: "Вы получили защиту от изгнания в текущем раунде!",
-      });
-    } else if (action === "force_reveal" && target) {
+    } else if (card.details?.action === "swap_inventory" && target) {
+      const temp = player.cards.inventory;
+      player.cards.inventory = target.cards.inventory;
+      target.cards.inventory = temp;
+    } else if (card.details?.action === "swap_backpack" && target) {
+      const temp = player.cards.backpack;
+      player.cards.backpack = target.cards.backpack;
+      target.cards.backpack = temp;
+    } else if (card.details?.action === "force_reveal" && target) {
       target.cards.professions.revealed = true;
-      this.addLog(
-        `Игрок ${target.name} был принужден раскрыть категорию Профессия!`,
-      );
-
-      this.io.to(target.id).emit("action:private", {
-        title: "⚠️ Против вас применена способность!",
-        message: `Игрок ${player.name} принудил вас досрочно открыть Профессию!`,
-      });
     }
 
     this.broadcastState();
