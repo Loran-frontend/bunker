@@ -57,12 +57,24 @@ class CardGenerator {
   }
 
   generateDisasterAndBunker() {
+    // 1. Выбираем случайную катастрофу
     const disaster =
       cardsData.disasters[
         Math.floor(Math.random() * cardsData.disasters.length)
       ];
-    const bunker =
-      cardsData.bunkers[Math.floor(Math.random() * cardsData.bunkers.length)];
+
+    // 2. Фильтруем бункеры, теги которых есть в списке совместимых у выбранной катастрофы
+    const validBunkers = cardsData.bunkers.filter((b) =>
+      disaster.compatibleBunkerTags.includes(b.tag),
+    );
+
+    // Если по ошибке базы данных подходящих бункеров нет — берем весь список (предохранитель)
+    const bunkerPool =
+      validBunkers.length > 0 ? validBunkers : cardsData.bunkers;
+
+    // 3. Выбираем случайный бункер из отфильтрованного списка
+    const bunker = bunkerPool[Math.floor(Math.random() * bunkerPool.length)];
+
     return { disaster, bunker };
   }
 }
