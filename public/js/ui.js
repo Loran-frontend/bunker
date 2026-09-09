@@ -322,11 +322,19 @@ const UI = {
         cardsHtml = Object.keys(p.cards)
           .map((cat) => {
             const card = p.cards[cat];
-            return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] ${
-              card.revealed
-                ? "bg-amber-900/40 text-amber-300 border border-amber-700/50"
-                : "bg-gray-900 text-gray-500"
-            }">${categoryNames[cat]}: ${card.value}</span>`;
+            let badgeClass = "bg-gray-900 text-gray-500"; // По умолчанию скрыто
+
+            if (card.isPrivateReveal) {
+              // Приватное открытие — подсвечиваем фиолетовым цветом
+              badgeClass =
+                "bg-purple-900/40 text-purple-300 border border-purple-700/50 shadow-[0_0_8px_rgba(168,85,247,0.3)]";
+            } else if (card.revealed) {
+              // Публичное открытие — стандартный оранжевый
+              badgeClass =
+                "bg-amber-900/40 text-amber-300 border border-amber-700/50";
+            }
+
+            return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] ${badgeClass}">${categoryNames[cat]}: ${card.value}</span>`;
           })
           .join(" ");
       }

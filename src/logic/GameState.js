@@ -729,12 +729,10 @@ ${hasTraitor ? "Так как предатель попал в бункер, о�
 
     const card = player.cards[category];
     if (card.revealed) {
-      this.io
-        .to(socketId)
-        .emit("action:private", {
-          title: "Ошибка",
-          message: "Спец-карта уже использована!",
-        });
+      this.io.to(socketId).emit("action:private", {
+        title: "Ошибка",
+        message: "Спец-карта уже использована!",
+      });
       return;
     }
 
@@ -752,12 +750,10 @@ ${hasTraitor ? "Так как предатель попал в бункер, о�
       "Карантин",
     ].includes(cardName);
     if (selfTargetForbidden && targetId === socketId) {
-      this.io
-        .to(socketId)
-        .emit("action:private", {
-          title: "Ошибка",
-          message: "Эту способность нельзя применять на себя!",
-        });
+      this.io.to(socketId).emit("action:private", {
+        title: "Ошибка",
+        message: "Эту способность нельзя применять на себя!",
+      });
       return;
     }
 
@@ -768,54 +764,39 @@ ${hasTraitor ? "Так как предатель попал в бункер, о�
 
     // 1. ШПИОНАЖ И ПРОВЕРКИ
     if (cardName === "Рентген") {
-      // В UI нужно передавать массив из 2 targetId, либо берем целевого и следующего живого
       const alive = this.getAlivePlayers().filter((p) => p.id !== socketId);
       const targets = alive.slice(0, 2);
-      const info = targets
-        .map((t) => `${t.name}: Здоровье — [${t.cards.health.value}]`)
-        .join("\n");
-      this.io
-        .to(socketId)
-        .emit("action:private", { title: "🔬 Рентген", message: info });
+      targets.forEach((t) => {
+        t.cards.health.visibleTo = t.cards.health.visibleTo || [];
+        if (!t.cards.health.visibleTo.includes(socketId))
+          t.cards.health.visibleTo.push(socketId);
+      });
     } else if (cardName === "Обыск") {
       if (!target) return;
-      const cardsInfo = Object.entries(target.cards)
-        .map(([cat, c]) => `${cat.toUpperCase()}: ${c.value}`)
-        .join("\n");
-      this.io
-        .to(socketId)
-        .emit("action:private", {
-          title: `🔍 Обыск: ${target.name}`,
-          message: cardsInfo,
-        });
+      Object.keys(target.cards).forEach((cat) => {
+        target.cards[cat].visibleTo = target.cards[cat].visibleTo || [];
+        if (!target.cards[cat].visibleTo.includes(socketId))
+          target.cards[cat].visibleTo.push(socketId);
+      });
     } else if (cardName === "Шпионский досмотр") {
       if (!target) return;
-      const msg = `Здоровье: ${target.cards.health.value}\nБиология: ${target.cards.biology.value}`;
-      this.io
-        .to(socketId)
-        .emit("action:private", {
-          title: `🕵️ Досмотр: ${target.name}`,
-          message: msg,
-        });
+      ["health", "biology"].forEach((cat) => {
+        target.cards[cat].visibleTo = target.cards[cat].visibleTo || [];
+        if (!target.cards[cat].visibleTo.includes(socketId))
+          target.cards[cat].visibleTo.push(socketId);
+      });
     } else if (cardName === "Детектив") {
       if (!target) return;
-      const spec2 = target.cards.special2
-        ? target.cards.special2.value
-        : "Отсутствует";
-      this.io
-        .to(socketId)
-        .emit("action:private", {
-          title: `🕵️ Детектив: ${target.name}`,
-          message: `Спец-карта #2: ${spec2}`,
-        });
+      if (target.cards.special2) {
+        target.cards.special2.visibleTo = target.cards.special2.visibleTo || [];
+        if (!target.cards.special2.visibleTo.includes(socketId))
+          target.cards.special2.visibleTo.push(socketId);
+      }
     } else if (cardName === "Сканер") {
       if (!target) return;
-      this.io
-        .to(socketId)
-        .emit("action:private", {
-          title: `📡 Сканер: ${target.name}`,
-          message: `Инвентарь: ${target.cards.inventory.value}`,
-        });
+      target.cards.inventory.visibleTo = target.cards.inventory.visibleTo || [];
+      if (!target.cards.inventory.visibleTo.includes(socketId))
+        target.cards.inventory.visibleTo.push(socketId);
     } else if (cardName === "Шпион") {
       if (!target) return;
       const unrevealed = Object.keys(target.cards).filter(
@@ -825,12 +806,10 @@ ${hasTraitor ? "Так как предатель попал в бункер, о�
         unrevealed.length > 0
           ? unrevealed[Math.floor(Math.random() * unrevealed.length)]
           : "health";
-      this.io
-        .to(socketId)
-        .emit("action:private", {
-          title: `🕵️ Шпион: ${target.name}`,
-          message: `Карта [${chosenCat.toUpperCase()}]: ${target.cards[chosenCat].value}`,
-        });
+      target.cards[chosenCat].visibleTo =
+        target.cards[chosenCat].visibleTo || [];
+      if (!target.cards[chosenCat].visibleTo.includes(socketId))
+        target.cards[chosenCat].visibleTo.push(socketId);
 
       // 2. ГОЛОСОВАНИЕ И МОДИФИКАТОРЫ
     } else if (cardName === "Кража голоса") {
@@ -909,8 +888,17 @@ ${hasTraitor ? "Так как предатель попал в бункер, о�
       if (p.cards) {
         Object.keys(p.cards).forEach((cat) => {
           const card = p.cards[cat];
-          if (isSelf || card.revealed) {
-            sanitizedCards[cat] = card;
+          // Проверяем, есть ли у текущего игрока персональный доступ к этой карте
+          const isPrivate =
+            card.revealedTo && card.revealedTo.includes(forSocketId);
+
+          if (isSelf || card.revealed || isPrivate) {
+            sanitizedCards[cat] = { ...card };
+            // Если это чужая карта и она открыта только для нас, добавляем маркер для UI
+            if (isPrivate && !isSelf && !card.revealed) {
+              sanitizedCards[cat].isPrivateReveal = true;
+              sanitizedCards[cat].revealed = true; // Считаем её открытой для корректного отображения
+            }
           } else {
             sanitizedCards[cat] = {
               type: cat,
