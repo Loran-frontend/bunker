@@ -739,22 +739,30 @@ ${hasTraitor ? "Так как предатель попал в бункер, о�
     const action = card.details ? card.details.action : null;
     const target = this.players.get(targetId);
 
-    // Блокируем применение шпионажа и вредительства на самого себя
+    // Запрещаем применять вредоносные и шпионские действия на себя
     const selfTargetForbidden = [
-      "swap_inventory",
-      "swap_backpack",
-      "steal_inventory",
-      "cancel_vote",
-      "steal_vote",
-      "force_reveal",
-      "spy_all",
-      "spy_bio_health",
-      "spy_inventory",
-      "spy_special",
-      "spy_random",
-    ].includes(action);
+      "swap_inventory_target",
+      "steal_inventory_target",
+      "swap_backpack_target",
+      "steal_backpack_target",
+      "cancel_vote_target",
+      "steal_vote_target",
+      "spy_random_target",
+      "spy_all_target",
+      "spy_bio_health_target",
+      "spy_special_target",
+      "spy_inventory_target",
+      "force_reveal_prof_target",
+      "force_reveal_health_target",
+      "force_reveal_inventory_target",
+      "force_reveal_phobia_target",
+      "infect_health_target",
+      "infect_phobia_target",
+      "change_prof_target",
+      "destroy_inventory_target",
+    ];
 
-    if (selfTargetForbidden && targetId === socketId) {
+    if (selfTargetForbidden.includes(action) && targetId === socketId) {
       this.io.to(socketId).emit("action:private", {
         title: "Ошибка",
         message: "Эту способность нельзя применять на себя!",
@@ -762,47 +770,45 @@ ${hasTraitor ? "Так как предатель попал в бункер, о�
       return;
     }
 
+    if (action && action.endsWith("_target") && !target) return;
+
     card.revealed = true;
     this.addLog(`⚡ Игрок ${player.name} применил спец-карту "${card.value}"!`);
 
-    // 1. ШПИОНАЖ (Добавляем socketId в visibleTo, чтобы только применивший видел карту)
+    const alive = this.getAlivePlayers();
+    const myIndex = alive.findIndex((p) => p.id === socketId);
+    const aboveIndex = (myIndex - 1 + alive.length) % alive.length; // Находим индекс игрока строго над вами
+    const playerAbove = alive[aboveIndex];
+
+    // Функция для тайного раскрытия
+    const secretReveal = (t, catName) => {
+      if (!t.cards[catName]) return;
+      t.cards[catName].visibleTo = t.cards[catName].visibleTo || [];
+      if (!t.cards[catName].visibleTo.includes(socketId))
+        t.cards[catName].visibleTo.push(socketId);
+    };
+
+    // --- 1. ШПИОНАЖ (Тайный) ---
     if (action === "spy_health_two") {
-      let alive = this.getAlivePlayers().filter((p) => p.id !== socketId);
-      alive = alive.sort(() => 0.5 - Math.random()).slice(0, 2); // Честный рандом 2-х игроков
-      alive.forEach((t) => {
-        t.cards.health.visibleTo = t.cards.health.visibleTo || [];
-        if (!t.cards.health.visibleTo.includes(socketId))
-          t.cards.health.visibleTo.push(socketId);
-      });
-    } else if (
-      [
-        "spy_random",
-        "spy_bio_health",
-        "spy_special",
-        "spy_inventory",
-        "spy_all",
-      ].includes(action)
-    ) {
-      if (!target) return;
-
-      const revealCat = (c) => {
-        if (!target.cards[c]) return;
-        target.cards[c].visibleTo = target.cards[c].visibleTo || [];
-        if (!target.cards[c].visibleTo.includes(socketId)) {
-          target.cards[c].visibleTo.push(socketId); // Приватный доступ
-        }
-      };
-
-      if (action === "spy_all") {
-        Object.keys(target.cards).forEach(revealCat);
-      } else if (action === "spy_bio_health") {
-        revealCat("health");
-        revealCat("biology");
-      } else if (action === "spy_special") {
-        revealCat("special2");
-      } else if (action === "spy_inventory") {
-        revealCat("inventory");
-      } else if (action === "spy_random") {
+      let others = alive
+        .filter((p) => p.id !== socketId)
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 2);
+      others.forEach((t) => secretReveal(t, "health"));
+    } else if (action === "spy_prof_above" && playerAbove) {
+      secretReveal(playerAbove, "professions");
+    } else if (action.startsWith("spy_") && action.endsWith("_target")) {
+      if (action === "spy_all_target") {
+        Object.keys(target.cards).forEach((c) => secretReveal(target, c));
+      } else if (action === "spy_bio_health_target") {
+        secretReveal(target, "health");
+        secretReveal(target, "biology");
+      } else if (action === "spy_special_target") {
+        secretReveal(target, "special1");
+        secretReveal(target, "special2");
+      } else if (action === "spy_inventory_target") {
+        secretReveal(target, "inventory");
+      } else if (action === "spy_random_target") {
         const unrevealed = Object.keys(target.cards).filter(
           (c) => !target.cards[c].revealed,
         );
@@ -810,86 +816,108 @@ ${hasTraitor ? "Так как предатель попал в бункер, о�
           unrevealed.length > 0
             ? unrevealed[Math.floor(Math.random() * unrevealed.length)]
             : "health";
-        revealCat(chosenCat);
+        secretReveal(target, chosenCat);
       }
     }
 
-    // 2. ГОЛОСОВАНИЕ И ИММУНИТЕТ
-    else if (action === "steal_vote") {
-      if (target) {
-        const targetMods = this.specialModifiers.get(target.id) || {};
-        targetMods.cancelVote = true; // Забираем голос
-      }
+    // --- 2. ГОЛОСОВАНИЕ И ИММУНИТЕТ ---
+    else if (action === "steal_vote_target") {
+      const targetMods = this.specialModifiers.get(target.id) || {};
+      targetMods.cancelVote = true;
       const myMods = this.specialModifiers.get(socketId) || {};
-      myMods.doubleVote = true; // Отдаем себе
+      myMods.doubleVote = true;
     } else if (action === "double_vote_self") {
       const mods = this.specialModifiers.get(socketId) || {};
       mods.doubleVote = true;
-    } else if (action === "cancel_vote") {
-      if (target) {
-        const mods = this.specialModifiers.get(target.id) || {};
-        mods.cancelVote = true;
-      }
-    } else if (action === "immunity") {
+    } else if (action === "cancel_vote_target") {
+      const mods = this.specialModifiers.get(target.id) || {};
+      mods.cancelVote = true;
+    } else if (action === "immunity_self") {
       const mods = this.specialModifiers.get(socketId) || {};
+      mods.immunity = true;
+    } else if (action === "immunity_target") {
+      const mods = this.specialModifiers.get(target.id) || {};
       mods.immunity = true;
     }
 
-    // 3. МЕДИЦИНА (Разделено на "только себя" и "любого")
+    // --- 3. МЕДИЦИНА И ВРЕДИТЕЛЬСТВО (Публичные изменения) ---
     else if (action === "cure_health_target" || action === "cure_health_self") {
-      const targetPlayer =
-        action === "cure_health_self" ? player : target || player;
-      targetPlayer.cards.health.value = "Абсолютно здоров (Излечен)";
-      targetPlayer.cards.health.revealed = true;
-    } else if (action === "cure_phobia_target") {
-      const targetPlayer = target || player;
-      targetPlayer.cards.phobias.value = "Фобия отсутствует (Излечена)";
-      targetPlayer.cards.phobias.revealed = true;
+      const t = action === "cure_health_self" ? player : target;
+      t.cards.health.value = "Абсолютно здоров (Излечен)";
+      t.cards.health.revealed = true;
+    } else if (
+      action === "cure_phobia_target" ||
+      action === "cure_phobia_self"
+    ) {
+      const t = action === "cure_phobia_self" ? player : target;
+      t.cards.phobias.value = "Фобия отсутствует (Излечена)";
+      t.cards.phobias.revealed = true;
+    } else if (action === "infect_health_target") {
+      target.cards.health.value = "Тяжело болен (Заражение)";
+      target.cards.health.revealed = true;
+    } else if (action === "infect_phobia_target") {
+      target.cards.phobias.value = "Острая паранойя (Приобретено)";
+      target.cards.phobias.revealed = true;
+    } else if (action === "change_prof_target") {
+      target.cards.professions.value = "Разнорабочий (Принудительная смена)";
+      target.cards.professions.revealed = true;
+    } else if (action === "destroy_inventory_target") {
+      target.cards.inventory.value = "Пусто (Уничтожено)";
+      target.cards.inventory.revealed = true;
     }
 
-    // 4. ОБМЕНЫ И КРАЖА ИНВЕНТАРЯ
-    else if (action === "shuffle_inventory") {
-      const alive = this.getAlivePlayers();
-      const myIndex = alive.findIndex((p) => p.id === socketId);
-      const leftNeighbor = alive[(myIndex + 1) % alive.length];
-      if (leftNeighbor) {
-        const temp = player.cards.inventory;
-        player.cards.inventory = leftNeighbor.cards.inventory;
-        leftNeighbor.cards.inventory = temp;
-        this.addLog(
-          `Игрок ${player.name} обменялся инвентарем с соседом слева!`,
-        );
-      }
-    } else if (action === "swap_inventory" && target) {
+    // --- 4. ОБМЕНЫ И КРАЖИ ---
+    else if (action === "swap_inventory_above" && playerAbove) {
+      const temp = player.cards.inventory;
+      player.cards.inventory = playerAbove.cards.inventory;
+      playerAbove.cards.inventory = temp;
+      this.addLog(
+        `Игрок ${player.name} обменялся инвентарем с игроком сверху (${playerAbove.name})!`,
+      );
+    } else if (action === "swap_backpack_above" && playerAbove) {
+      const temp = player.cards.backpack;
+      player.cards.backpack = playerAbove.cards.backpack;
+      playerAbove.cards.backpack = temp;
+      this.addLog(
+        `Игрок ${player.name} обменялся рюкзаками с игроком сверху (${playerAbove.name})!`,
+      );
+    } else if (action === "swap_inventory_target") {
       const temp = player.cards.inventory;
       player.cards.inventory = target.cards.inventory;
       target.cards.inventory = temp;
-    } else if (action === "steal_inventory" && target) {
+    } else if (action === "steal_inventory_target") {
       player.cards.inventory = target.cards.inventory;
       target.cards.inventory = {
         type: "inventory",
         value: "Пусто (Украдено)",
         revealed: true,
       };
-    } else if (action === "swap_backpack" && target) {
+    } else if (action === "swap_backpack_target") {
       const temp = player.cards.backpack;
       player.cards.backpack = target.cards.backpack;
       target.cards.backpack = temp;
+    } else if (action === "steal_backpack_target") {
+      player.cards.backpack = target.cards.backpack;
+      target.cards.backpack = {
+        type: "backpack",
+        value: "Пусто (Украдено)",
+        revealed: true,
+      };
     }
 
-    // 5. ПРИНУДИТЕЛЬНОЕ (Публичное открытие)
-    else if (action === "force_reveal" && target) {
-      target.cards.professions.revealed = true; // Public, увидят все
+    // --- 5. ПРИНУДИТЕЛЬНОЕ РАСКРЫТИЕ ---
+    else if (action.startsWith("force_reveal_")) {
+      if (action === "force_reveal_prof_target")
+        target.cards.professions.revealed = true;
+      if (action === "force_reveal_health_target")
+        target.cards.health.revealed = true;
+      if (action === "force_reveal_inventory_target")
+        target.cards.inventory.revealed = true;
+      if (action === "force_reveal_phobia_target")
+        target.cards.phobias.revealed = true;
     }
 
     this.broadcastState();
-  }
-
-  broadcastSpeaking(socketId, isSpeaking) {
-    this.io.to(this.roomId).emit("voice:speaking_update", {
-      playerId: socketId,
-      isSpeaking,
-    });
   }
 
   getSanitizedState(forSocketId) {

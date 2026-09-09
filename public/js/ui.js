@@ -233,28 +233,20 @@ const UI = {
     if (!me || !me.cards || !me.cards[cat]) return;
 
     const card = me.cards[cat];
-    const cardName = card.name;
     const action = card.details ? card.details.action : null;
+    if (!action) return;
 
-    // Карты, применяемые мгновенно только на себя
-    const selfOnlyCards = [
-      "Иммунитет",
-      "Щит бункера",
-      "Амнистия",
-      "Запретная зона",
-      "Второстепенный маневр",
-      "Двойной голос",
-      "Провокация",
-      "Голос народа",
-      "Перетасовка",
-    ];
-
-    if (selfOnlyCards.includes(cardName)) {
-      SocketHandler.useCardAction(cat, socket.id);
+    // Авто-применение (без выбора цели): карты только на себя, на соседа сверху или на случайных игроков
+    if (
+      action.endsWith("_self") ||
+      action.endsWith("_above") ||
+      action.endsWith("_two")
+    ) {
+      SocketHandler.useCardAction(cat, socket.id); // Сразу применяем к себе (логика сервера разберется)
       return;
     }
 
-    // Для остальных карт открываем модальное окно выбора цели (включая себя для Лечения)
+    // Если карта требует выбора цели (заканчивается на _target), открываем модалку списка игроков
     const modal = document.getElementById("action-modal");
     const targetList = document.getElementById("action-target-list");
     targetList.innerHTML = "";
@@ -268,6 +260,7 @@ const UI = {
       btn.className =
         "w-full py-2 bg-gray-700 hover:bg-amber-600 hover:text-black rounded text-sm text-gray-200 font-medium transition mb-1";
       btn.innerText = p.id === socket.id ? `${p.name} (На себя)` : p.name;
+
       btn.onclick = () => {
         SocketHandler.useCardAction(cat, p.id);
         modal.classList.add("hidden");
