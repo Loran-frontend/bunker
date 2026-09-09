@@ -2,7 +2,7 @@ const VoiceChat = {
   localStream: null,
   peers: new Map(), // socketId -> RTCPeerConnection
   audioElements: new Map(), // socketId -> HTMLAudioElement
-  isMicMuted: false,
+  isMicMuted: true,
   isDeafened: false,
   audioContext: null,
   analyser: null,
@@ -23,6 +23,15 @@ const VoiceChat = {
         audio: true,
         video: false,
       });
+
+      // 1. Отключаем аудиопоток по умолчанию
+      this.localStream.getAudioTracks().forEach((track) => {
+        track.enabled = false;
+      });
+
+      // 2. Устанавливаем визуальное состояние кнопки микрофона "Выкл"
+      this.updateMuteBtnUI();
+
       this.setupAudioAnalyzer();
     } catch (err) {
       console.warn(
@@ -51,14 +60,7 @@ const VoiceChat = {
     }
   },
 
-  toggleMute() {
-    this.isMicMuted = !this.isMicMuted;
-    if (this.localStream) {
-      this.localStream.getAudioTracks().forEach((track) => {
-        track.enabled = !this.isMicMuted;
-      });
-    }
-
+  updateMuteBtnUI() {
     const muteBtn = document.getElementById("voice-mute-btn");
     if (muteBtn) {
       if (this.isMicMuted) {
@@ -71,6 +73,17 @@ const VoiceChat = {
           "px-2 py-1 text-xs font-bold rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-800";
       }
     }
+  },
+
+  toggleMute() {
+    this.isMicMuted = !this.isMicMuted;
+    if (this.localStream) {
+      this.localStream.getAudioTracks().forEach((track) => {
+        track.enabled = !this.isMicMuted;
+      });
+    }
+
+    this.updateMuteBtnUI();
   },
 
   toggleDeafen() {
