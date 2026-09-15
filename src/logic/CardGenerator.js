@@ -15,17 +15,27 @@ class CardGenerator {
       phobias: [...cardsData.phobias],
       skills: [...cardsData.skills],
       hobbies: [...cardsData.hobbies],
-      special1: [...cardsData.special1],
-      special2: [...cardsData.special1],
+      // Special cards are one category with two cards per player.
+      special: [...cardsData.special1],
     };
   }
 
   getRandomItem(category) {
     if (!this.pools[category] || this.pools[category].length === 0) {
-      this.pools[category] = [...cardsData[category]];
+      const source = cardsData[category] || cardsData.special1;
+      this.pools[category] = [...source];
     }
     const idx = Math.floor(Math.random() * this.pools[category].length);
     return this.pools[category].splice(idx, 1)[0];
+  }
+
+  formatCard(category, item) {
+    return {
+      type: category,
+      value: typeof item === "string" ? item : item.name,
+      details: typeof item === "object" ? item : null,
+      revealed: false,
+    };
   }
 
   generatePlayerCards() {
@@ -38,41 +48,35 @@ class CardGenerator {
       "phobias",
       "skills",
       "hobbies",
-      "special1",
-      "special2",
     ];
 
     const cards = {};
     categories.forEach((cat) => {
-      const item = this.getRandomItem(cat);
-      cards[cat] = {
-        type: cat,
-        value: typeof item === "string" ? item : item.name,
-        details: typeof item === "object" ? item : null,
-        revealed: false,
-      };
+      cards[cat] = this.formatCard(cat, this.getRandomItem(cat));
     });
+
+    // One logical "special" category containing exactly two distinct cards.
+    cards.special = [
+      this.formatCard("special", this.getRandomItem("special")),
+      this.formatCard("special", this.getRandomItem("special")),
+    ];
 
     return cards;
   }
 
   generateDisasterAndBunker() {
-    // 1. Выбираем случайную катастрофу
     const disaster =
       cardsData.disasters[
         Math.floor(Math.random() * cardsData.disasters.length)
       ];
 
-    // 2. Фильтруем бункеры, теги которых есть в списке совместимых у выбранной катастрофы
     const validBunkers = cardsData.bunkers.filter((b) =>
       disaster.compatibleBunkerTags.includes(b.tag),
     );
 
-    // Если по ошибке базы данных подходящих бункеров нет — берем весь список (предохранитель)
     const bunkerPool =
       validBunkers.length > 0 ? validBunkers : cardsData.bunkers;
 
-    // 3. Выбираем случайный бункер из отфильтрованного списка
     const bunker = bunkerPool[Math.floor(Math.random() * bunkerPool.length)];
 
     return { disaster, bunker };
