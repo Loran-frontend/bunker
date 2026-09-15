@@ -1,5 +1,6 @@
 const assert = require("assert");
 const GameState = require("../src/logic/GameState");
+const cardsData = require("../src/data/cardsData");
 const hardenGameState = require("../src/logic/GameStateHardening");
 
 // The production RoomManager applies this once; tests apply it directly.
@@ -39,6 +40,46 @@ function special(action, name = action) {
     revealed: false,
   };
 }
+
+(function testEverySpecialActionHasServerSupport() {
+  const supported = new Set([
+    "spy_random_target",
+    "spy_all_target",
+    "spy_bio_health_target",
+    "spy_special_target",
+    "spy_inventory_target",
+    "spy_health_two",
+    "spy_prof_above",
+    "double_vote_self",
+    "cancel_vote_target",
+    "steal_vote_target",
+    "immunity_self",
+    "immunity_target",
+    "cure_health_self",
+    "cure_health_target",
+    "cure_phobia_target",
+    "cure_phobia_self",
+    "infect_health_target",
+    "infect_phobia_target",
+    "change_prof_target",
+    "destroy_inventory_target",
+    "swap_inventory_target",
+    "steal_inventory_target",
+    "swap_backpack_target",
+    "steal_backpack_target",
+    "swap_inventory_above",
+    "swap_backpack_above",
+    "force_reveal_prof_target",
+    "force_reveal_health_target",
+    "force_reveal_inventory_target",
+    "force_reveal_phobia_target",
+  ]);
+
+  const actions = cardsData.special1.map((card) => card.action);
+  actions.forEach((action) => {
+    assert(supported.has(action), `unsupported special action: ${action}`);
+  });
+})();
 
 (function testCancelVoteRevokesExistingVote() {
   const game = new GameState(fakeIo(), "TEST");
