@@ -20,6 +20,10 @@ class RoomManager {
   }
 
   createRoom(socket, playerName) {
+    if (this.playerRoomMap.has(socket.id)) {
+      return { roomId: this.playerRoomMap.get(socket.id), res: { success: false, message: 'Вы уже находитесь в комнате.' } };
+    }
+
     const roomId = this.generateRoomCode();
     const gameState = new GameState(this.io, roomId);
     this.rooms.set(roomId, gameState);
@@ -37,6 +41,10 @@ class RoomManager {
   }
 
   joinRoom(socket, roomId, playerName) {
+    if (this.playerRoomMap.has(socket.id)) {
+      return { success: false, message: 'Вы уже находитесь в комнате.' };
+    }
+
     const formattedCode = (roomId || '').trim().toUpperCase();
     const gameState = this.rooms.get(formattedCode);
 
