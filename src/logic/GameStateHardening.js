@@ -121,6 +121,13 @@ module.exports = function hardenGameState(GameState) {
         delete card.revealedTo;
       });
     });
+
+    // The mechanics layer owns its private/public expansion state. Merge it only
+    // after the base GameState has been sanitized so secret goals, traitor
+    // actions and private relations never leak to another socket.
+    if (typeof this.getMechanics === "function" && this.mechanics) {
+      return this.getMechanics().sanitize(state, forSocketId);
+    }
     return state;
   };
 

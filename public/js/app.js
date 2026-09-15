@@ -1,78 +1,34 @@
 document.addEventListener('DOMContentLoaded', () => {
   UI.init();
-  if (window.VoiceChat) {
-    window.VoiceChat.init();
-  }
+  if (window.VoiceChat) window.VoiceChat.init();
   SocketHandler.initListeners();
 
-  const nameInput = document.getElementById('player-name-input');
-  const createRoomBtn = document.getElementById('create-room-btn');
-  const roomCodeInput = document.getElementById('room-code-input');
-  const joinRoomBtn = document.getElementById('join-room-btn');
-  const joinModal = document.getElementById('join-modal');
+  const nameInput=document.getElementById('player-name-input'), createRoomBtn=document.getElementById('create-room-btn'), roomCodeInput=document.getElementById('room-code-input'), joinRoomBtn=document.getElementById('join-room-btn'), joinModal=document.getElementById('join-modal');
+  createRoomBtn.addEventListener('click',()=>{const name=nameInput.value.trim();if(!name)return alert('Пожалуйста, введите никнейм');SocketHandler.createRoom(name);joinModal.classList.add('hidden');});
+  joinRoomBtn.addEventListener('click',()=>{const name=nameInput.value.trim(),code=roomCodeInput.value.trim();if(!name)return alert('Пожалуйста, введите никнейм');if(!code)return alert('Пожалуйста, введите код комнаты');SocketHandler.joinRoom(name,code);joinModal.classList.add('hidden');});
+  document.getElementById('traitor-toggle').addEventListener('change',(e)=>SocketHandler.updateSettings({traitorModeEnabled:e.target.checked}));
+  document.getElementById('host-start-btn').addEventListener('click',()=>SocketHandler.startGame()); document.getElementById('host-next-btn').addEventListener('click',()=>SocketHandler.nextPhase());
+  const chatInput=document.getElementById('chat-input'),chatSendBtn=document.getElementById('chat-send-btn'); const sendChat=()=>{const text=chatInput.value.trim();if(text){SocketHandler.sendChatMessage(text);chatInput.value='';}}; chatSendBtn.addEventListener('click',sendChat); chatInput.addEventListener('keypress',(e)=>{if(e.key==='Enter')sendChat();});
+  document.getElementById('action-modal-cancel').addEventListener('click',()=>document.getElementById('action-modal').classList.add('hidden')); document.getElementById('private-modal-close').addEventListener('click',()=>document.getElementById('private-modal').classList.add('hidden')); document.getElementById('finale-modal-close').addEventListener('click',()=>document.getElementById('finale-modal').classList.add('hidden'));
 
-  createRoomBtn.addEventListener('click', () => {
-    const name = nameInput.value.trim();
-    if (!name) {
-      alert('Пожалуйста, введите никнейм');
-      return;
-    }
-    SocketHandler.createRoom(name);
-    joinModal.classList.add('hidden');
-  });
+  const originalUpdate=UI.updateGameState.bind(UI);
+  UI.updateGameState=(state)=>{originalUpdate(state);renderMechanics(state);};
+  window.UI.showMechanicsNotice=(text)=>{UI.showPrivateModal('⚠️ Событие',text);};
 
-  joinRoomBtn.addEventListener('click', () => {
-    const name = nameInput.value.trim();
-    const code = roomCodeInput.value.trim();
-    if (!name) {
-      alert('Пожалуйста, введите никнейм');
-      return;
-    }
-    if (!code) {
-      alert('Пожалуйста, введите код комнаты');
-      return;
-    }
-    SocketHandler.joinRoom(name, code);
-    joinModal.classList.add('hidden');
-  });
-
-  document.getElementById('traitor-toggle').addEventListener('change', (e) => {
-    SocketHandler.updateSettings({ traitorModeEnabled: e.target.checked });
-  });
-
-  document.getElementById('host-start-btn').addEventListener('click', () => {
-    SocketHandler.startGame();
-  });
-
-  document.getElementById('host-next-btn').addEventListener('click', () => {
-    SocketHandler.nextPhase();
-  });
-
-  const chatInput = document.getElementById('chat-input');
-  const chatSendBtn = document.getElementById('chat-send-btn');
-
-  const sendChat = () => {
-    const text = chatInput.value.trim();
-    if (text) {
-      SocketHandler.sendChatMessage(text);
-      chatInput.value = '';
-    }
-  };
-
-  chatSendBtn.addEventListener('click', sendChat);
-  chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendChat();
-  });
-
-  document.getElementById('action-modal-cancel').addEventListener('click', () => {
-    document.getElementById('action-modal').classList.add('hidden');
-  });
-
-  document.getElementById('private-modal-close').addEventListener('click', () => {
-    document.getElementById('private-modal').classList.add('hidden');
-  });
-
-  document.getElementById('finale-modal-close').addEventListener('click', () => {
-    document.getElementById('finale-modal').classList.add('hidden');
-  });
+  function ensurePanel(){
+    if(document.getElementById('mechanics-panel'))return;
+    const host=document.getElementById('tab-bunker'); if(!host)return;
+    const panel=document.createElement('div'); panel.id='mechanics-panel'; panel.className='bg-gray-950 border border-gray-800 rounded-lg p-3 space-y-3';
+    panel.innerHTML='<div class="flex items-center justify-between"><b class="text-amber-400">📦 Ресурсы бункера</b><span id="resource-status" class="text-[10px] text-gray-500"></span></div><div id="resource-bars" class="grid grid-cols-2 gap-2"></div><div id="event-box" class="hidden border border-red-800/60 rounded p-2"></div><div id="goal-box" class="border border-purple-800/60 rounded p-2"></div><div id="traitor-actions" class="hidden border border-red-800 rounded p-2"></div><div id="alliance-box" class="border border-blue-800/60 rounded p-2"></div>';
+    host.insertBefore(panel,host.firstChild);
+  }
+  function renderMechanics(state){
+    ensurePanel(); const r=state.resources; if(!r)return;
+    const bars=document.getElementById('resource-bars'); if(bars){bars.innerHTML='';[['food','🍖 Еда'],['water','💧 Вода'],['electricity','⚡ Энергия'],['medicine','💊 Медикаменты']].forEach(([k,label])=>{const max=r.max?.[k]||1,pct=Math.round((r[k]/max)*100);const el=document.createElement('div');el.className='bg-gray-900 rounded p-2 border border-gray-800';el.innerHTML=`<div class="flex justify-between text-[11px]"><span>${label}</span><b>${r[k]}</b></div><div class="h-1.5 bg-gray-800 rounded mt-1"><div class="h-1.5 bg-amber-500 rounded" style="width:${Math.max(0,Math.min(100,pct))}%"></div></div>`;bars.appendChild(el);});}
+    const eventBox=document.getElementById('event-box'); if(eventBox){const e=state.currentEvent;eventBox.classList.toggle('hidden',!e);if(e)eventBox.innerHTML=`<div class="font-bold text-red-400">${e.icon} ${e.title}</div><div class="text-[11px] text-gray-300 mt-1">${e.description}</div>`;}
+    const goal=document.getElementById('goal-box'); if(goal){const g=state.personalGoal;goal.innerHTML=g?`<div class="font-bold text-purple-300">🎯 Моя секретная цель</div><div class="text-xs text-gray-200 mt-1">${g.description}</div><div class="text-[10px] text-gray-500 mt-1">Статус: ${g.status==='completed'?'выполнена':'активна'}</div>`:'<span class="text-xs text-gray-500">Цель появится после старта игры.</span>';}
+    const ta=document.getElementById('traitor-actions'); const me=state.players?.find(p=>p.id===socket.id); if(ta){const visible=!!state.traitorActions;ta.classList.toggle('hidden',!visible);if(visible){const actions=[['sabotageElectricity','⚡ Электричество'],['contaminateWater','💧 Вода'],['destroyFood','🍖 Еда'],['sabotageEquipment','🔧 Оборудование']];ta.innerHTML=`<div class="font-bold text-red-400">🕵️ СЕКРЕТНО — саботажи: ${state.traitorActions.remaining}</div><div class="grid grid-cols-2 gap-1 mt-2">${actions.map(([a,n])=>`<button class="bg-red-900/70 hover:bg-red-800 rounded px-2 py-1 text-[10px]" data-sabotage="${a}">${n}</button>`).join('')}</div>`;ta.querySelectorAll('[data-sabotage]').forEach(b=>b.onclick=()=>SocketHandler.sabotage(b.dataset.sabotage));}}
+    const ab=document.getElementById('alliance-box'); if(ab){const own=(state.alliances||[]).filter(a=>a.playerA===socket.id||a.playerB===socket.id);ab.innerHTML='<div class="font-bold text-blue-300 text-xs">🤝 Союзы</div>'+(own.length?own.map(a=>{const other=a.playerA===socket.id?a.playerB:a.playerA;const p=state.players.find(x=>x.id===other);return `<div class="flex items-center justify-between text-[10px] mt-1"><span>${p?.name||'Игрок'}</span><button class="text-red-300" data-break="${a.id}">Разорвать</button></div>`;}).join(''):'<div class="text-[10px] text-gray-500 mt-1">Активных союзов нет.</div>');ab.querySelectorAll('[data-break]').forEach(b=>b.onclick=()=>SocketHandler.breakAlliance(b.dataset.break));}
+    if(me&&state.status!=='LOBBY') document.querySelectorAll('#players-list > div').forEach((el,i)=>{const p=state.players[i];if(!p||p.id===socket.id||p.eliminated)return;if(!el.querySelector('[data-alliance]')){const row=document.createElement('div');row.className='flex gap-1';row.innerHTML=`<button data-alliance class="text-[10px] px-1.5 py-0.5 bg-blue-800 rounded">🤝</button><button class="text-[10px] px-1.5 py-0.5 bg-gray-700 rounded" data-trust="-1">⚠️</button><button class="text-[10px] px-1.5 py-0.5 bg-emerald-800 rounded" data-trust="1">❤️</button>`;row.querySelector('[data-alliance]').onclick=()=>SocketHandler.createAlliance(p.id);row.querySelectorAll('[data-trust]').forEach(b=>b.onclick=()=>SocketHandler.updateTrust(p.id,Number(b.dataset.trust)));el.appendChild(row);}});
+  }
 });

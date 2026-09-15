@@ -1,216 +1,37 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const os = require("os");
-const path = require("path");
-const RoomManager = require("./src/logic/RoomManager");
-
-const app = express();
-const server = http.createServer(app);
-
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "*";
-const corsOrigins = CLIENT_ORIGIN.includes(",")
-  ? CLIENT_ORIGIN.split(",").map((o) => o.trim())
-  : CLIENT_ORIGIN;
-
-const io = new Server(server, {
-  cors: {
-    origin: corsOrigins,
-    methods: ["GET", "POST"],
-  },
+const express=require("express");
+const http=require("http");
+const {Server}=require("socket.io");
+const os=require("os");
+const path=require("path");
+const RoomManager=require("./src/logic/RoomManager");
+const GameState=require("./src/logic/GameState");
+const {installGameMechanics}=require("./src/logic/GameMechanics");
+const installFinaleMechanicsPatch=require("./src/logic/FinaleMechanicsPatch");
+const app=express();const server=http.createServer(app);const CLIENT_ORIGIN=process.env.CLIENT_ORIGIN||"*";const corsOrigins=CLIENT_ORIGIN.includes(",")?CLIENT_ORIGIN.split(",").map(o=>o.trim()):CLIENT_ORIGIN;const io=new Server(server,{cors:{origin:corsOrigins,methods:["GET","POST"]}});app.use(express.static(path.join(__dirname,"public")));app.get("/api/health",(req,res)=>res.json({status:"ok",time:new Date().toISOString()}));app.get("/api/voice-config",(req,res)=>{const url=(process.env.TURN_URL||"").trim(),username=process.env.TURN_USERNAME||"",credential=process.env.TURN_CREDENTIAL||"";res.json(url&&username&&credential?{iceServers:[{urls:url,username,credential}]}:{iceServers:[]});});
+installGameMechanics(GameState);installFinaleMechanicsPatch(GameState);const roomManager=new RoomManager(io);
+function getLocalIp(){const interfaces=os.networkInterfaces();for(const name of Object.keys(interfaces))for(const iface of interfaces[name])if(iface.family==="IPv4"&&!iface.internal)return iface.address;return"localhost";}
+function stringValue(value,maxLength=200){if(typeof value!=="string")return"";return value.replace(/[\u0000-\u001F\u007F]/g,"").trim().slice(0,maxLength);}
+function validSignal(signal){if(!signal||typeof signal!=="object"||Array.isArray(signal))return false;if(signal.sdp)return typeof signal.sdp==="object"&&typeof signal.sdp.type==="string"&&["offer","answer","pranswer","rollback"].includes(signal.sdp.type)&&typeof signal.sdp.sdp==="string"&&signal.sdp.sdp.length<=20000;if(signal.candidate)return typeof signal.candidate==="object"&&typeof signal.candidate.candidate==="string"&&signal.candidate.candidate.length<=5000;return false;}
+function createRateLimiter(){const buckets=new Map();return(socketId,key,limit,windowMs)=>{const now=Date.now(),bucketKey=`${socketId}:${key}`,bucket=buckets.get(bucketKey)||{start:now,count:0};if(now-bucket.start>=windowMs){bucket.start=now;bucket.count=0;}bucket.count++;buckets.set(bucketKey,bucket);return bucket.count<=limit;};}const allowEvent=createRateLimiter();function playerAction(room,socket,fn){if(!room||room.status==="LOBBY"||room.status==="GAME_OVER")return;const player=room.players.get(socket.id);if(!player||player.eliminated)return;return fn(room,player);}function rBroadcast(room){room.broadcastState();}
+io.on("connection",socket=>{
+ console.log(`[Socket] Новое подключение: ${socket.id}`);
+ socket.on("room:create",payload=>{if(!allowEvent(socket.id,"room",5,10000))return;const name=stringValue(payload?.name,32);if(!name)return socket.emit("error:msg","Введите имя игрока.");const{res}=roomManager.createRoom(socket,name);if(!res.success)socket.emit("error:msg",res.message);});
+ socket.on("room:join",payload=>{if(!allowEvent(socket.id,"room",5,10000))return;const name=stringValue(payload?.name,32),roomId=stringValue(payload?.roomId,20);if(!name||!roomId)return socket.emit("error:msg","Укажите имя и код комнаты.");const res=roomManager.joinRoom(socket,roomId,name);if(!res.success)socket.emit("error:msg",res.message);});
+ socket.on("room:settings",payload=>{if(!allowEvent(socket.id,"settings",10,10000))return;const room=roomManager.getRoomBySocket(socket.id);if(room&&typeof payload?.traitorModeEnabled==="boolean")room.updateSettings(socket.id,{traitorModeEnabled:payload.traitorModeEnabled});});
+ socket.on("chat:message",payload=>{if(!allowEvent(socket.id,"chat",6,10000))return;const room=roomManager.getRoomBySocket(socket.id),text=stringValue(payload?.text,500);if(room&&text)room.addChatMessage(socket.id,text);});
+ socket.on("game:start",()=>{if(!allowEvent(socket.id,"game",5,10000))return;const room=roomManager.getRoomBySocket(socket.id);if(room){const res=room.startGame(socket.id);if(!res.success)socket.emit("error:msg",res.message);}});
+ socket.on("game:next_phase",()=>{if(!allowEvent(socket.id,"phase",10,10000))return;const room=roomManager.getRoomBySocket(socket.id);if(room)room.forceNextPhase(socket.id);});
+ socket.on("card:reveal",payload=>{if(!allowEvent(socket.id,"cards",20,10000))return;const room=roomManager.getRoomBySocket(socket.id),category=stringValue(payload?.category,40);if(room&&category)room.revealCard(socket.id,category);});
+ socket.on("card:action",payload=>{if(!allowEvent(socket.id,"cards",20,10000))return;const room=roomManager.getRoomBySocket(socket.id),category=stringValue(payload?.category,40),targetId=stringValue(payload?.targetId,100)||null;if(room&&category)room.useSpecialCard(socket.id,category,targetId);});
+ socket.on("vote:cast",payload=>{if(!allowEvent(socket.id,"vote",30,10000))return;const room=roomManager.getRoomBySocket(socket.id),targetId=stringValue(payload?.targetId,100);if(room&&targetId)room.castVote(socket.id,targetId);});
+ socket.on("alliance:create",payload=>{if(!allowEvent(socket.id,"alliance",10,10000))return;const room=roomManager.getRoomBySocket(socket.id),targetId=stringValue(payload?.targetId,100);const result=playerAction(room,socket,r=>r.proposeAlliance(socket.id,targetId));if(result&&!result.success)socket.emit("error:msg",result.message);else if(result)rBroadcast(room);});
+ socket.on("alliance:accept",payload=>{if(!allowEvent(socket.id,"alliance",10,10000))return;const room=roomManager.getRoomBySocket(socket.id),fromId=stringValue(payload?.fromId,100);const result=playerAction(room,socket,r=>r.acceptAlliance(socket.id,fromId));if(result&&!result.success)socket.emit("error:msg",result.message);else if(result)rBroadcast(room);});
+ socket.on("alliance:break",payload=>{if(!allowEvent(socket.id,"alliance",10,10000))return;const room=roomManager.getRoomBySocket(socket.id),allianceId=stringValue(payload?.allianceId,200);const result=playerAction(room,socket,r=>r.breakAlliance(socket.id,allianceId));if(result&&!result.success)socket.emit("error:msg",result.message);else if(result)rBroadcast(room);});
+ socket.on("trust:update",payload=>{if(!allowEvent(socket.id,"trust",15,10000))return;const room=roomManager.getRoomBySocket(socket.id),targetId=stringValue(payload?.targetId,100),delta=Number(payload?.delta);const result=playerAction(room,socket,r=>r.updateTrust(socket.id,targetId,delta));if(result&&!result.success)socket.emit("error:msg",result.message);else if(result)rBroadcast(room);});
+ socket.on("state:heal",payload=>{if(!allowEvent(socket.id,"heal",10,10000))return;const room=roomManager.getRoomBySocket(socket.id),targetId=stringValue(payload?.targetId,100);const result=playerAction(room,socket,r=>r.healPlayer(socket.id,targetId));if(result&&!result.success)socket.emit("error:msg",result.message);else if(result)rBroadcast(room);});
+ socket.on("traitor:sabotage",payload=>{if(!allowEvent(socket.id,"sabotage",5,10000))return;const room=roomManager.getRoomBySocket(socket.id),action=stringValue(payload?.action,50);const result=playerAction(room,socket,r=>r.traitorSabotage(socket.id,action));if(result&&!result.success)socket.emit("error:msg",result.message);else if(result)rBroadcast(room);});
+ socket.on("voice:signal",payload=>{if(!allowEvent(socket.id,"voice-signal",250,10000))return;const room=roomManager.getRoomBySocket(socket.id),targetId=stringValue(payload?.targetId,100);if(!room||!targetId||targetId===socket.id||!validSignal(payload?.signal))return;const targetPlayer=room.players.get(targetId);if(!targetPlayer||targetPlayer.eliminated)return;io.to(targetId).emit("voice:signal",{senderId:socket.id,signal:payload.signal});});
+ socket.on("voice:speaking",payload=>{if(!allowEvent(socket.id,"voice-speaking",20,10000))return;const room=roomManager.getRoomBySocket(socket.id);if(room&&typeof payload?.isSpeaking==="boolean")room.broadcastSpeaking(socket.id,payload.isSpeaking);});
+ socket.on("disconnect",()=>{console.log(`[Socket] Игрок отключился: ${socket.id}`);roomManager.handleDisconnect(socket.id);});
 });
-
-app.use(express.static(path.join(__dirname, "public")));
-
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString() });
-});
-
-// TURN credentials are intentionally returned only when explicitly configured.
-// They are client-side WebRTC credentials, so deployments should prefer
-// short-lived credentials from their TURN provider.
-app.get("/api/voice-config", (req, res) => {
-  const url = (process.env.TURN_URL || "").trim();
-  const username = process.env.TURN_USERNAME || "";
-  const credential = process.env.TURN_CREDENTIAL || "";
-  res.json(url && username && credential
-    ? { iceServers: [{ urls: url, username, credential }] }
-    : { iceServers: [] });
-});
-
-const roomManager = new RoomManager(io);
-
-function getLocalIp() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === "IPv4" && !iface.internal) return iface.address;
-    }
-  }
-  return "localhost";
-}
-
-function stringValue(value, maxLength = 200) {
-  if (typeof value !== "string") return "";
-  return value
-    .replace(/[\u0000-\u001F\u007F]/g, "")
-    .trim()
-    .slice(0, maxLength);
-}
-
-function validSignal(signal) {
-  if (!signal || typeof signal !== "object" || Array.isArray(signal)) return false;
-  if (signal.sdp) {
-    return (
-      typeof signal.sdp === "object" &&
-      typeof signal.sdp.type === "string" &&
-      ["offer", "answer", "pranswer", "rollback"].includes(signal.sdp.type) &&
-      typeof signal.sdp.sdp === "string" &&
-      signal.sdp.sdp.length <= 20000
-    );
-  }
-  if (signal.candidate) {
-    return (
-      typeof signal.candidate === "object" &&
-      typeof signal.candidate.candidate === "string" &&
-      signal.candidate.candidate.length <= 5000
-    );
-  }
-  return false;
-}
-
-function createRateLimiter() {
-  const buckets = new Map();
-  return (socketId, key, limit, windowMs) => {
-    const now = Date.now();
-    const bucketKey = `${socketId}:${key}`;
-    const bucket = buckets.get(bucketKey) || { start: now, count: 0 };
-    if (now - bucket.start >= windowMs) {
-      bucket.start = now;
-      bucket.count = 0;
-    }
-    bucket.count += 1;
-    buckets.set(bucketKey, bucket);
-    return bucket.count <= limit;
-  };
-}
-
-const allowEvent = createRateLimiter();
-
-io.on("connection", (socket) => {
-  console.log(`[Socket] Новое подключение: ${socket.id}`);
-
-  socket.on("room:create", (payload = {}) => {
-    if (!allowEvent(socket.id, "room", 5, 10000)) return;
-    const name = stringValue(payload.name, 32);
-    if (!name) return socket.emit("error:msg", "Введите имя игрока.");
-    const { res } = roomManager.createRoom(socket, name);
-    if (!res.success) socket.emit("error:msg", res.message);
-  });
-
-  socket.on("room:join", (payload = {}) => {
-    if (!allowEvent(socket.id, "room", 5, 10000)) return;
-    const name = stringValue(payload.name, 32);
-    const roomId = stringValue(payload.roomId, 20);
-    if (!name || !roomId) return socket.emit("error:msg", "Укажите имя и код комнаты.");
-    const res = roomManager.joinRoom(socket, roomId, name);
-    if (!res.success) socket.emit("error:msg", res.message);
-  });
-
-  socket.on("room:settings", (payload = {}) => {
-    if (!allowEvent(socket.id, "settings", 10, 10000)) return;
-    const room = roomManager.getRoomBySocket(socket.id);
-    if (room && typeof payload.traitorModeEnabled === "boolean") {
-      room.updateSettings(socket.id, { traitorModeEnabled: payload.traitorModeEnabled });
-    }
-  });
-
-  socket.on("chat:message", (payload = {}) => {
-    if (!allowEvent(socket.id, "chat", 6, 10000)) return;
-    const room = roomManager.getRoomBySocket(socket.id);
-    const text = stringValue(payload.text, 500);
-    if (room && text) room.addChatMessage(socket.id, text);
-  });
-
-  socket.on("game:start", () => {
-    if (!allowEvent(socket.id, "game", 5, 10000)) return;
-    const room = roomManager.getRoomBySocket(socket.id);
-    if (room) {
-      const res = room.startGame(socket.id);
-      if (!res.success) socket.emit("error:msg", res.message);
-    }
-  });
-
-  socket.on("game:next_phase", () => {
-    if (!allowEvent(socket.id, "phase", 10, 10000)) return;
-    const room = roomManager.getRoomBySocket(socket.id);
-    if (room) room.forceNextPhase(socket.id);
-  });
-
-  socket.on("card:reveal", (payload = {}) => {
-    if (!allowEvent(socket.id, "cards", 20, 10000)) return;
-    const room = roomManager.getRoomBySocket(socket.id);
-    const category = stringValue(payload.category, 40);
-    if (room && category) room.revealCard(socket.id, category);
-  });
-
-  socket.on("card:action", (payload = {}) => {
-    if (!allowEvent(socket.id, "cards", 20, 10000)) return;
-    const room = roomManager.getRoomBySocket(socket.id);
-    const category = stringValue(payload.category, 40);
-    const targetId = stringValue(payload.targetId, 100) || null;
-    if (room && category) room.useSpecialCard(socket.id, category, targetId);
-  });
-
-  socket.on("vote:cast", (payload = {}) => {
-    if (!allowEvent(socket.id, "vote", 30, 10000)) return;
-    const room = roomManager.getRoomBySocket(socket.id);
-    const targetId = stringValue(payload.targetId, 100);
-    if (room && targetId) room.castVote(socket.id, targetId);
-  });
-
-  socket.on("voice:signal", (payload = {}) => {
-    if (!allowEvent(socket.id, "voice-signal", 250, 10000)) return;
-    const room = roomManager.getRoomBySocket(socket.id);
-    const targetId = stringValue(payload.targetId, 100);
-    if (!room || !targetId || targetId === socket.id || !validSignal(payload.signal)) return;
-
-    const targetPlayer = room.players.get(targetId);
-    if (!targetPlayer || targetPlayer.eliminated) return;
-
-    io.to(targetId).emit("voice:signal", {
-      senderId: socket.id,
-      signal: payload.signal,
-    });
-  });
-
-  socket.on("voice:speaking", (payload = {}) => {
-    if (!allowEvent(socket.id, "voice-speaking", 20, 10000)) return;
-    const room = roomManager.getRoomBySocket(socket.id);
-    if (room && typeof payload.isSpeaking === "boolean") {
-      room.broadcastSpeaking(socket.id, payload.isSpeaking);
-    }
-  });
-
-  socket.on("disconnect", () => {
-    console.log(`[Socket] Игрок отключился: ${socket.id}`);
-    roomManager.handleDisconnect(socket.id);
-  });
-});
-
-const PORT = process.env.PORT || 3000;
-const HOST = "0.0.0.0";
-const LOCAL_IP = getLocalIp();
-
-if (require.main === module) {
-  server.listen(PORT, HOST, () => {
-    console.log("====================================================");
-    console.log("   🔥 ПОСТАПОКАЛИПТИЧЕСКАЯ ВЕБ-ИГРА «БУНКЕР» 🔥     ");
-    console.log("====================================================");
-    console.log(` Сервер запущен на хосте: ${HOST}:${PORT}`);
-    console.log(` 🌐 Игра доступна по адресу: http://${LOCAL_IP}:${PORT}`);
-    console.log("====================================================");
-  });
-}
-
-module.exports = app;
+const PORT=process.env.PORT||3000,HOST="0.0.0.0",LOCAL_IP=getLocalIp();if(require.main===module)server.listen(PORT,HOST,()=>{console.log("====================================================");console.log("   🔥 ПОСТАПОКАЛИПТИЧЕСКАЯ ВЕБ-ИГРА «БУНКЕР» 🔥     ");console.log("====================================================");console.log(` Сервер запущен на хосте: ${HOST}:${PORT}`);console.log(` 🌐 Игра доступна по адресу: http://${LOCAL_IP}:${PORT}`);console.log("====================================================");});module.exports=app;
