@@ -32,94 +32,111 @@ function getLocalIp() {
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
+      if (iface.family === "IPv4" && !iface.internal) return iface.address;
     }
   }
   return "localhost";
 }
 
+function stringValue(value, maxLength = 200) {
+  return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
+function validSignal(signal) {
+  if (!signal || typeof signal !== "object") return false;
+  if (signal.sdp) {
+    return typeof signal.sdp === "object" &&
+      typeof signal.sdp.type === "string" &&
+      typeof signal.sdp.sdp === "string" &&
+      signal.sdp.sdp.length <= 20000;
+  }
+  if (signal.candidate) {
+    return typeof signal.candidate === "object" &&
+      typeof signal.candidate.candidate === "string" &&
+      signal.candidate.candidate.length <= 5000;
+  }
+  return false;
+}
+
 io.on("connection", (socket) => {
   console.log(`[Socket] Новое подключение: ${socket.id}`);
 
-  socket.on("room:create", ({ name }) => {
-    const { roomId, res } = roomManager.createRoom(socket, name);
-    if (!res.success) {
-      socket.emit("error:msg", res.message);
-    }
+  socket.on("room:create", (payload = {}) => {
+    const name = stringValue(payload.name, 32);
+    const { res } = roomManager.createRoom(socket, name);
+    if (!res.success) socket.emit("error:msg", res.message);
   });
 
-  socket.on("room:join", ({ name, roomId }) => {
+  socket.on("room:join", (payload = {}) => {
+    const name = stringValue(payload.name, 32);
+    const roomId = stringValue(payload.roomId, 20);
     const res = roomManager.joinRoom(socket, roomId, name);
-    if (!res.success) {
-      socket.emit("error:msg", res.message);
+    if (!res.success) socket.emit("error:msg", res.message);
+  });
+
+  socket.on("room:settings", (payload = {}) => {
+    const room = roomManager.getRoomBySocket(socket.id);
+    if (room && typeof payload.traitorModeEnabled === "boolean") {
+      room.updateSettings(socket.id, { traitorModeEnabled: payload.traitorModeEnabled });
     }
   });
 
-  socket.on("room:settings", ({ traitorModeEnabled }) => {
+  socket.on("chat:message", (payload = {}) => {
     const room = roomManager.getRoomBySocket(socket.id);
-    if (room) {
-      room.updateSettings(socket.id, { traitorModeEnabled });
-    }
-  });
-
-  socket.on("chat:message", ({ text }) => {
-    const room = roomManager.getRoomBySocket(socket.id);
-    if (room) {
-      room.addChatMessage(socket.id, text);
-    }
+    const text = stringValue(payload.text, 500);
+    if (room && text) room.addChatMessage(socket.id, text);
   });
 
   socket.on("game:start", () => {
     const room = roomManager.getRoomBySocket(socket.id);
     if (room) {
       const res = room.startGame(socket.id);
-      if (!res.success) {
-        socket.emit("error:msg", res.message);
-      }
+      if (!res.success) socket.emit("error:msg", res.message);
     }
   });
 
   socket.on("game:next_phase", () => {
     const room = roomManager.getRoomBySocket(socket.id);
-    if (room) {
-      room.forceNextPhase(socket.id);
-    }
+    if (room) room.forceNextPhase(socket.id);
   });
 
-  socket.on("card:reveal", ({ category }) => {
+  socket.on("card:reveal", (payload = {}) => {
     const room = roomManager.getRoomBySocket(socket.id);
-    if (room) {
-      room.revealCard(socket.id, category);
-    }
+    const category = stringValue(payload.category, 40);
+    if (room && category) room.revealCard(socket.id, category);
   });
 
-  socket.on("card:action", ({ category, targetId }) => {
+  socket.on("card:action", (payload = {}) => {
     const room = roomManager.getRoomBySocket(socket.id);
-    if (room) {
-      room.useSpecialCard(socket.id, category, targetId);
-    }
+    const category = stringValue(payload.category, 40);
+    const targetId = stringValue(payload.targetId, 100) || null;
+    if (room && category) room.useSpecialCard(socket.id, category, targetId);
   });
 
-  socket.on("vote:cast", ({ targetId }) => {
+  socket.on("vote:cast", (payload = {}) => {
     const room = roomManager.getRoomBySocket(socket.id);
-    if (room) {
-      room.castVote(socket.id, targetId);
-    }
+    const targetId = stringValue(payload.targetId, 100);
+    if (room && targetId) room.castVote(socket.id, targetId);
   });
 
-  socket.on("voice:signal", ({ targetId, signal }) => {
+  socket.on("voice:signal", (payload = {}) => {
+    const room = roomManager.getRoomBySocket(socket.id);
+    const targetId = stringValue(payload.targetId, 100);
+    if (!room || !targetId || targetId === socket.id || !validSignal(payload.signal)) return;
+
+    const targetPlayer = room.players.get(targetId);
+    if (!targetPlayer || targetPlayer.eliminated) return;
+
     io.to(targetId).emit("voice:signal", {
       senderId: socket.id,
-      signal,
+      signal: payload.signal,
     });
   });
 
-  socket.on("voice:speaking", ({ isSpeaking }) => {
+  socket.on("voice:speaking", (payload = {}) => {
     const room = roomManager.getRoomBySocket(socket.id);
-    if (room) {
-      room.broadcastSpeaking(socket.id, isSpeaking);
+    if (room && typeof payload.isSpeaking === "boolean") {
+      room.broadcastSpeaking(socket.id, payload.isSpeaking);
     }
   });
 
