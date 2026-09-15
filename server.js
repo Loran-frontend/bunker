@@ -26,6 +26,18 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
 });
 
+// TURN credentials are intentionally returned only when explicitly configured.
+// They are client-side WebRTC credentials, so deployments should prefer
+// short-lived credentials from their TURN provider.
+app.get("/api/voice-config", (req, res) => {
+  const url = (process.env.TURN_URL || "").trim();
+  const username = process.env.TURN_USERNAME || "";
+  const credential = process.env.TURN_CREDENTIAL || "";
+  res.json(url && username && credential
+    ? { iceServers: [{ urls: url, username, credential }] }
+    : { iceServers: [] });
+});
+
 const roomManager = new RoomManager(io);
 
 function getLocalIp() {
@@ -39,42 +51,74 @@ function getLocalIp() {
 }
 
 function stringValue(value, maxLength = 200) {
-  return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .trim()
+    .slice(0, maxLength);
 }
 
 function validSignal(signal) {
-  if (!signal || typeof signal !== "object") return false;
+  if (!signal || typeof signal !== "object" || Array.isArray(signal)) return false;
   if (signal.sdp) {
-    return typeof signal.sdp === "object" &&
+    return (
+      typeof signal.sdp === "object" &&
       typeof signal.sdp.type === "string" &&
+      ["offer", "answer", "pranswer", "rollback"].includes(signal.sdp.type) &&
       typeof signal.sdp.sdp === "string" &&
-      signal.sdp.sdp.length <= 20000;
+      signal.sdp.sdp.length <= 20000
+    );
   }
   if (signal.candidate) {
-    return typeof signal.candidate === "object" &&
+    return (
+      typeof signal.candidate === "object" &&
       typeof signal.candidate.candidate === "string" &&
-      signal.candidate.candidate.length <= 5000;
+      signal.candidate.candidate.length <= 5000
+    );
   }
   return false;
 }
+
+function createRateLimiter() {
+  const buckets = new Map();
+  return (socketId, key, limit, windowMs) => {
+    const now = Date.now();
+    const bucketKey = `${socketId}:${key}`;
+    const bucket = buckets.get(bucketKey) || { start: now, count: 0 };
+    if (now - bucket.start >= windowMs) {
+      bucket.start = now;
+      bucket.count = 0;
+    }
+    bucket.count += 1;
+    buckets.set(bucketKey, bucket);
+    return bucket.count <= limit;
+  };
+}
+
+const allowEvent = createRateLimiter();
 
 io.on("connection", (socket) => {
   console.log(`[Socket] Новое подключение: ${socket.id}`);
 
   socket.on("room:create", (payload = {}) => {
+    if (!allowEvent(socket.id, "room", 5, 10000)) return;
     const name = stringValue(payload.name, 32);
+    if (!name) return socket.emit("error:msg", "Введите имя игрока.");
     const { res } = roomManager.createRoom(socket, name);
     if (!res.success) socket.emit("error:msg", res.message);
   });
 
   socket.on("room:join", (payload = {}) => {
+    if (!allowEvent(socket.id, "room", 5, 10000)) return;
     const name = stringValue(payload.name, 32);
     const roomId = stringValue(payload.roomId, 20);
+    if (!name || !roomId) return socket.emit("error:msg", "Укажите имя и код комнаты.");
     const res = roomManager.joinRoom(socket, roomId, name);
     if (!res.success) socket.emit("error:msg", res.message);
   });
 
   socket.on("room:settings", (payload = {}) => {
+    if (!allowEvent(socket.id, "settings", 10, 10000)) return;
     const room = roomManager.getRoomBySocket(socket.id);
     if (room && typeof payload.traitorModeEnabled === "boolean") {
       room.updateSettings(socket.id, { traitorModeEnabled: payload.traitorModeEnabled });
@@ -82,12 +126,14 @@ io.on("connection", (socket) => {
   });
 
   socket.on("chat:message", (payload = {}) => {
+    if (!allowEvent(socket.id, "chat", 6, 10000)) return;
     const room = roomManager.getRoomBySocket(socket.id);
     const text = stringValue(payload.text, 500);
     if (room && text) room.addChatMessage(socket.id, text);
   });
 
   socket.on("game:start", () => {
+    if (!allowEvent(socket.id, "game", 5, 10000)) return;
     const room = roomManager.getRoomBySocket(socket.id);
     if (room) {
       const res = room.startGame(socket.id);
@@ -96,17 +142,20 @@ io.on("connection", (socket) => {
   });
 
   socket.on("game:next_phase", () => {
+    if (!allowEvent(socket.id, "phase", 10, 10000)) return;
     const room = roomManager.getRoomBySocket(socket.id);
     if (room) room.forceNextPhase(socket.id);
   });
 
   socket.on("card:reveal", (payload = {}) => {
+    if (!allowEvent(socket.id, "cards", 20, 10000)) return;
     const room = roomManager.getRoomBySocket(socket.id);
     const category = stringValue(payload.category, 40);
     if (room && category) room.revealCard(socket.id, category);
   });
 
   socket.on("card:action", (payload = {}) => {
+    if (!allowEvent(socket.id, "cards", 20, 10000)) return;
     const room = roomManager.getRoomBySocket(socket.id);
     const category = stringValue(payload.category, 40);
     const targetId = stringValue(payload.targetId, 100) || null;
@@ -114,12 +163,14 @@ io.on("connection", (socket) => {
   });
 
   socket.on("vote:cast", (payload = {}) => {
+    if (!allowEvent(socket.id, "vote", 30, 10000)) return;
     const room = roomManager.getRoomBySocket(socket.id);
     const targetId = stringValue(payload.targetId, 100);
     if (room && targetId) room.castVote(socket.id, targetId);
   });
 
   socket.on("voice:signal", (payload = {}) => {
+    if (!allowEvent(socket.id, "voice-signal", 250, 10000)) return;
     const room = roomManager.getRoomBySocket(socket.id);
     const targetId = stringValue(payload.targetId, 100);
     if (!room || !targetId || targetId === socket.id || !validSignal(payload.signal)) return;
@@ -134,6 +185,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("voice:speaking", (payload = {}) => {
+    if (!allowEvent(socket.id, "voice-speaking", 20, 10000)) return;
     const room = roomManager.getRoomBySocket(socket.id);
     if (room && typeof payload.isSpeaking === "boolean") {
       room.broadcastSpeaking(socket.id, payload.isSpeaking);
