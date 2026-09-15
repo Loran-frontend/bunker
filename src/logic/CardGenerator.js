@@ -15,8 +15,7 @@ class CardGenerator {
       phobias: [...cardsData.phobias],
       skills: [...cardsData.skills],
       hobbies: [...cardsData.hobbies],
-      // Both special slots draw from the same pool so a player gets
-      // two cards from one logical Special category without duplicates.
+      // Both special slots draw from one logical Special category.
       special: [...cardsData.special1],
     };
   }
@@ -56,10 +55,25 @@ class CardGenerator {
       cards[cat] = this.formatCard(cat, this.getRandomItem(cat));
     });
 
-    // Keep the two server-side slots for backwards compatibility with the
-    // existing action logic. They are nevertheless one logical category.
-    cards.special1 = this.formatCard("special", this.getRandomItem("special"));
-    cards.special2 = this.formatCard("special", this.getRandomItem("special"));
+    // Two slots are retained for backwards compatibility, but both belong to
+    // one logical Special category. They must always differ for the same player.
+    const firstSpecial = this.getRandomItem("special");
+    let secondSpecial = this.getRandomItem("special");
+
+    if (secondSpecial?.name === firstSpecial?.name) {
+      const alternatives = cardsData.special1.filter(
+        (item) => item.name !== firstSpecial.name,
+      );
+      secondSpecial = alternatives[Math.floor(Math.random() * alternatives.length)];
+
+      const poolIndex = this.pools.special.findIndex(
+        (item) => item.name === secondSpecial.name,
+      );
+      if (poolIndex >= 0) this.pools.special.splice(poolIndex, 1);
+    }
+
+    cards.special1 = this.formatCard("special", firstSpecial);
+    cards.special2 = this.formatCard("special", secondSpecial);
 
     return cards;
   }
