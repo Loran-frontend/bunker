@@ -3,8 +3,8 @@ const GameState = require('./GameState');
 class RoomManager {
   constructor(io) {
     this.io = io;
-    this.rooms = new Map(); // roomId -> GameState instance
-    this.playerRoomMap = new Map(); // socketId -> roomId
+    this.rooms = new Map();
+    this.playerRoomMap = new Map();
   }
 
   generateRoomCode() {
@@ -61,10 +61,36 @@ class RoomManager {
 
     const gameState = this.rooms.get(roomId);
     if (gameState) {
+      // A disconnected player must immediately lose voting eligibility.
+      // Remove both their own vote and votes targeting the disconnected player.
+      if (gameState.votes) {
+        gameState.votes.delete(socketId);
+        for (const [voterId, targetId] of gameState.votes.entries()) {
+          if (targetId === socketId) gameState.votes.delete(voterId);
+        }
+      }
+
       gameState.removePlayer(socketId);
+
+      // If the disconnect completed the current vote, resolve it immediately
+      // instead of waiting for the old timer to expire.
+      if (gameState.status === 'VOTING') {
+        const validVoters = gameState.getAlivePlayers().filter((p) => {
+          const mods = gameState.specialModifiers.get(p.id) || {};
+          return !mods.cancelVote;
+        });
+        if (gameState.votes.size >= validVoters.length) {
+          if (gameState.timer) clearInterval(gameState.timer);
+          gameState.processVotingResults();
+        } else {
+          gameState.broadcastVoteUpdate();
+        }
+      }
+
       gameState.broadcastState();
 
       if (gameState.players.size === 0) {
+        if (gameState.timer) clearInterval(gameState.timer);
         this.rooms.delete(roomId);
       }
     }
