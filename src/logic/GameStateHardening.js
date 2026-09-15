@@ -84,6 +84,7 @@ module.exports = function hardenGameState(GameState) {
   GameState.prototype.removePlayer = function (socketId) {
     const wasDefense = this.status === "DEFENSE";
     const wasSpeaker = this.defenseSpeakerId === socketId;
+    const wasCandidate = this.tiedCandidates.includes(socketId);
 
     originalRemovePlayer.call(this, socketId);
 
@@ -91,7 +92,7 @@ module.exports = function hardenGameState(GameState) {
 
     this.tiedCandidates = this.tiedCandidates.filter((id) => isAlive(this, id));
 
-    if (wasDefense && (wasSpeaker || !this.tiedCandidates.includes(socketId))) {
+    if (wasDefense && (wasSpeaker || wasCandidate)) {
       if (this.timer) clearInterval(this.timer);
       this.timer = null;
       this.isDefensePhase = false;
@@ -116,8 +117,6 @@ module.exports = function hardenGameState(GameState) {
     const state = originalGetSanitizedState.call(this, forSocketId);
     state.players.forEach((player) => {
       Object.values(player.cards || {}).forEach((card) => {
-        // visibleTo/revealedTo are server-side authorization metadata and
-        // must never expose socket IDs to clients.
         delete card.visibleTo;
         delete card.revealedTo;
       });
