@@ -70,6 +70,10 @@ module.exports = function hardenGameState(GameState) {
   };
 
   GameState.prototype.processVotingResults = function () {
+    // A timer tick and the final vote can arrive in the same event loop turn.
+    // Only the first resolver is allowed to advance the state machine.
+    if (this.status !== "VOTING") return;
+
     for (const [voterId, targetId] of this.votes.entries()) {
       if (!hasVotingRights(this, voterId) || !isAlive(this, targetId)) {
         this.votes.delete(voterId);
