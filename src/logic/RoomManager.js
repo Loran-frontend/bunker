@@ -1,4 +1,7 @@
 const GameState = require('./GameState');
+const hardenGameState = require('./GameStateHardening');
+
+hardenGameState(GameState);
 
 class RoomManager {
   constructor(io) {
@@ -27,6 +30,8 @@ class RoomManager {
       this.playerRoomMap.set(socket.id, roomId);
       socket.emit('room:created', { roomId, state: gameState.getSanitizedState(socket.id) });
       gameState.broadcastState();
+    } else {
+      this.rooms.delete(roomId);
     }
     return { roomId, res };
   }
@@ -61,8 +66,6 @@ class RoomManager {
 
     const gameState = this.rooms.get(roomId);
     if (gameState) {
-      // A disconnected player must immediately lose voting eligibility.
-      // Remove both their own vote and votes targeting the disconnected player.
       if (gameState.votes) {
         gameState.votes.delete(socketId);
         for (const [voterId, targetId] of gameState.votes.entries()) {
@@ -72,8 +75,6 @@ class RoomManager {
 
       gameState.removePlayer(socketId);
 
-      // If the disconnect completed the current vote, resolve it immediately
-      // instead of waiting for the old timer to expire.
       if (gameState.status === 'VOTING') {
         const validVoters = gameState.getAlivePlayers().filter((p) => {
           const mods = gameState.specialModifiers.get(p.id) || {};
