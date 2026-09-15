@@ -135,7 +135,11 @@ function special(action, name = action) {
   const result = game.checkGameOver();
   assert.strictEqual(result, true);
   assert.strictEqual(game.status, "GAME_OVER");
-  assert.strictEqual(game.finaleResult, null, "finale event is async and may arrive after state broadcast");
+  assert.ok(game.finaleResult, "finale result must be generated when the game ends");
+  assert.strictEqual(game.finaleResult.hasTraitor, true);
+  assert.strictEqual(game.finaleResult.traitorName, "Player 1");
+  assert.deepStrictEqual(game.finaleResult.survivors, ["Player 1", "Player 2", "Player 3"]);
+  assert.strictEqual(game.finaleResult.victory, false);
 })();
 
 console.log("GameState tests passed");
