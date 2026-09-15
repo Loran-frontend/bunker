@@ -3,7 +3,6 @@
 module.exports = function hardenGameState(GameState) {
   const originalUseSpecialCard = GameState.prototype.useSpecialCard;
   const originalRemovePlayer = GameState.prototype.removePlayer;
-  const originalBroadcastVoteUpdate = GameState.prototype.broadcastVoteUpdate;
   const originalProcessVotingResults = GameState.prototype.processVotingResults;
 
   const isAlive = (game, id) => {
@@ -14,32 +13,33 @@ module.exports = function hardenGameState(GameState) {
   const hasVotingRights = (game, id) => {
     const player = game.players.get(id);
     if (!player || player.eliminated) return false;
-    return !(game.specialModifiers.get(id)?.cancelVote);
+    return !game.specialModifiers.get(id)?.cancelVote;
   };
 
+  const selfAllowedTargetActions = new Set([
+    "cure_health_target",
+    "cure_phobia_target",
+  ]);
+
   GameState.prototype.useSpecialCard = function (socketId, category, targetId) {
-    if (this.status !== "DISCUSSION" && this.status !== "VOTING") {
-      return;
-    }
+    if (this.status !== "DISCUSSION" && this.status !== "VOTING") return;
 
     const player = this.players.get(socketId);
     const card = player?.cards?.[category];
     const action = card?.details?.action;
-
     if (!player || !card || card.revealed || !action) return;
 
     if (action.endsWith("_target")) {
-      if (!targetId || targetId === socketId || !isAlive(this, targetId)) {
+      if (!targetId || !isAlive(this, targetId) ||
+          (targetId === socketId && !selfAllowedTargetActions.has(action))) {
         this.io.to(socketId).emit("action:private", {
           title: "Ошибка",
-          message: "Нужно выбрать другого живого игрока.",
+          message: "Нужно выбрать допустимого живого игрока.",
         });
         return;
       }
     }
 
-    // Cancel/steal vote must revoke an already-cast vote too, not just block
-    // future voting. This is the key semantic required by the card description.
     if (action === "cancel_vote_target" || action === "steal_vote_target") {
       this.votes.delete(targetId);
     }
@@ -66,16 +66,10 @@ module.exports = function hardenGameState(GameState) {
       totalVotes += 1;
     });
 
-    this.io.to(this.roomId).emit("vote:update", {
-      totalVotes,
-      voteCounts,
-    });
+    this.io.to(this.roomId).emit("vote:update", { totalVotes, voteCounts });
   };
 
   GameState.prototype.processVotingResults = function () {
-    // Remove votes that became invalid after the voter was cancelled,
-    // eliminated, or disconnected. The original resolver can then operate
-    // unchanged on a clean vote map.
     for (const [voterId, targetId] of this.votes.entries()) {
       if (!hasVotingRights(this, voterId) || !isAlive(this, targetId)) {
         this.votes.delete(voterId);
@@ -94,9 +88,6 @@ module.exports = function hardenGameState(GameState) {
 
     this.tiedCandidates = this.tiedCandidates.filter((id) => isAlive(this, id));
 
-    // A defense timer closes over the old candidate list. If a candidate leaves,
-    // immediately move to a safe revote instead of allowing the timer to call
-    // methods with a deleted player.
     if (wasDefense && (wasSpeaker || !this.tiedCandidates.includes(socketId))) {
       if (this.timer) clearInterval(this.timer);
       this.timer = null;
@@ -118,9 +109,6 @@ module.exports = function hardenGameState(GameState) {
     return originalCheckGameOver.call(this);
   };
 
-  // Make AI finale failures explicit and remove unreachable cleanup from the
-  // original implementation. The fallback in evaluateFinaleOutcome remains
-  // the source of truth if a provider returns an HTTP error or malformed data.
   GameState.prototype.generateAiFinaleStory = async function (survivors, hasTraitor) {
     const survivorDetails = survivors
       .map((s) => {
