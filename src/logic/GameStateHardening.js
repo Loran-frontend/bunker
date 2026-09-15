@@ -4,6 +4,7 @@ module.exports = function hardenGameState(GameState) {
   const originalUseSpecialCard = GameState.prototype.useSpecialCard;
   const originalRemovePlayer = GameState.prototype.removePlayer;
   const originalProcessVotingResults = GameState.prototype.processVotingResults;
+  const originalGetSanitizedState = GameState.prototype.getSanitizedState;
 
   const isAlive = (game, id) => {
     const player = game.players.get(id);
@@ -70,8 +71,6 @@ module.exports = function hardenGameState(GameState) {
   };
 
   GameState.prototype.processVotingResults = function () {
-    // A timer tick and the final vote can arrive in the same event loop turn.
-    // Only the first resolver is allowed to advance the state machine.
     if (this.status !== "VOTING") return;
 
     for (const [voterId, targetId] of this.votes.entries()) {
@@ -111,6 +110,19 @@ module.exports = function hardenGameState(GameState) {
   GameState.prototype.checkGameOver = function () {
     if (this.status === "GAME_OVER") return true;
     return originalCheckGameOver.call(this);
+  };
+
+  GameState.prototype.getSanitizedState = function (forSocketId) {
+    const state = originalGetSanitizedState.call(this, forSocketId);
+    state.players.forEach((player) => {
+      Object.values(player.cards || {}).forEach((card) => {
+        // visibleTo/revealedTo are server-side authorization metadata and
+        // must never expose socket IDs to clients.
+        delete card.visibleTo;
+        delete card.revealedTo;
+      });
+    });
+    return state;
   };
 
   GameState.prototype.generateAiFinaleStory = async function (survivors, hasTraitor) {
