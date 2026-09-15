@@ -1,4 +1,12 @@
-const socket = io("https://bunker-backend-wh84.onrender.com");
+// Same-origin by default. A separate frontend deployment can provide
+// window.BUNKER_SOCKET_URL before this script is loaded.
+const socket = io(window.BUNKER_SOCKET_URL || undefined, {
+  transports: ["websocket", "polling"],
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 500,
+  reconnectionDelayMax: 5000,
+});
 
 const SocketHandler = {
   createRoom(name) {
@@ -46,50 +54,18 @@ const SocketHandler = {
   },
 
   initListeners() {
-    socket.on('room:created', (data) => {
-      UI.updateGameState(data.state);
-    });
-
-    socket.on('game:init', (state) => {
-      UI.updateGameState(state);
-    });
-
-    socket.on('room:updated', (state) => {
-      UI.updateGameState(state);
-    });
-
-    socket.on('timer:tick', (data) => {
-      UI.updateTimer(data.timeLeft);
-    });
-
-    socket.on('vote:update', (data) => {
-      UI.updateVoteCounts(data.voteCounts);
-    });
-
-    socket.on('action:private', (data) => {
-      UI.showPrivateModal(data.title, data.message);
-    });
-
-    socket.on('log:new', (logMessage) => {
-      UI.appendLog(logMessage);
-    });
-
+    socket.on('room:created', (data) => UI.updateGameState(data.state));
+    socket.on('game:init', (state) => UI.updateGameState(state));
+    socket.on('room:updated', (state) => UI.updateGameState(state));
+    socket.on('timer:tick', (data) => UI.updateTimer(data.timeLeft));
+    socket.on('vote:update', (data) => UI.updateVoteCounts(data.voteCounts));
+    socket.on('action:private', (data) => UI.showPrivateModal(data.title, data.message));
+    socket.on('log:new', (logMessage) => UI.appendLog(logMessage));
     socket.on('voice:signal', (data) => {
-      if (window.VoiceChat) {
-        window.VoiceChat.handleSignal(data.senderId, data.signal);
-      }
+      if (window.VoiceChat) window.VoiceChat.handleSignal(data.senderId, data.signal);
     });
-
-    socket.on('voice:speaking_update', (data) => {
-      UI.updateSpeakingStatus(data.playerId, data.isSpeaking);
-    });
-
-    socket.on('game:finale', (result) => {
-      UI.showFinaleModal(result);
-    });
-
-    socket.on('error:msg', (msg) => {
-      alert(msg);
-    });
-  }
+    socket.on('voice:speaking_update', (data) => UI.updateSpeakingStatus(data.playerId, data.isSpeaking));
+    socket.on('game:finale', (result) => UI.showFinaleModal(result));
+    socket.on('error:msg', (msg) => alert(msg));
+  },
 };
