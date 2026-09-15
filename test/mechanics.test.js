@@ -3,10 +3,7 @@ const GameState = require('../src/logic/GameState');
 const { installGameMechanics } = require('../src/logic/GameMechanics');
 const hardenGameState = require('../src/logic/GameStateHardening');
 
-const io = {
-  to() { return { emit() {} }; },
-};
-
+const io = { to() { return { emit() {} }; } };
 installGameMechanics(GameState);
 hardenGameState(GameState);
 
@@ -20,11 +17,14 @@ function makeGame() {
 
 (function resourcesAndPrivateGoal() {
   const game = makeGame();
-  const state = game.getSanitizedState('p0');
-  assert.ok(state.resources);
-  assert.ok(Number.isFinite(state.resources.food));
-  assert.ok(state.personalGoal);
-  assert.ok(!('personalGoal' in game.getSanitizedState('p1') && game.getSanitizedState('p1').personalGoal.id === state.personalGoal.id) || true);
+  const own = game.getSanitizedState('p0');
+  const other = game.getSanitizedState('p1');
+  assert.ok(own.resources);
+  assert.ok(Number.isFinite(own.resources.food));
+  assert.ok(own.personalGoal);
+  assert.ok(other.personalGoal);
+  assert.notStrictEqual(other.personalGoal.id, own.personalGoal.id);
+  assert.strictEqual(other.traitorActions, null);
 })();
 
 (function sabotageIsServerAuthoritative() {
@@ -44,6 +44,14 @@ function makeGame() {
   assert.strictEqual(game.acceptAlliance('p1', 'p0').success, true);
   assert.strictEqual(game.getMechanics().publicAlliances().length, 1);
   assert.strictEqual(game.breakAlliance('p2', game.getMechanics().publicAlliances()[0].id).success, false);
+})();
+
+(function finaleHasMultipleOutcomes() {
+  const game = makeGame();
+  const survivors = game.getAlivePlayers().slice(0, game.bunkerCapacity);
+  const result = game.getMechanics().evaluateFinale(survivors);
+  assert.ok(['success', 'consequences', 'failure', 'traitor'].includes(result.outcome));
+  assert.ok(result.finalEvent && result.finalEvent.title);
 })();
 
 console.log('Mechanics tests passed.');
