@@ -15,14 +15,15 @@ class CardGenerator {
       phobias: [...cardsData.phobias],
       skills: [...cardsData.skills],
       hobbies: [...cardsData.hobbies],
-      // Special cards are one category with two cards per player.
+      // Both special slots draw from the same pool so a player gets
+      // two cards from one logical Special category without duplicates.
       special: [...cardsData.special1],
     };
   }
 
   getRandomItem(category) {
     if (!this.pools[category] || this.pools[category].length === 0) {
-      const source = cardsData[category] || cardsData.special1;
+      const source = category === "special" ? cardsData.special1 : cardsData[category];
       this.pools[category] = [...source];
     }
     const idx = Math.floor(Math.random() * this.pools[category].length);
@@ -39,6 +40,7 @@ class CardGenerator {
   }
 
   generatePlayerCards() {
+    const cards = {};
     const categories = [
       "professions",
       "health",
@@ -50,16 +52,14 @@ class CardGenerator {
       "hobbies",
     ];
 
-    const cards = {};
     categories.forEach((cat) => {
       cards[cat] = this.formatCard(cat, this.getRandomItem(cat));
     });
 
-    // One logical "special" category containing exactly two distinct cards.
-    cards.special = [
-      this.formatCard("special", this.getRandomItem("special")),
-      this.formatCard("special", this.getRandomItem("special")),
-    ];
+    // Keep the two server-side slots for backwards compatibility with the
+    // existing action logic. They are nevertheless one logical category.
+    cards.special1 = this.formatCard("special", this.getRandomItem("special"));
+    cards.special2 = this.formatCard("special", this.getRandomItem("special"));
 
     return cards;
   }
