@@ -6,7 +6,7 @@ const SocketHandler = {
     socket.on('room:created',(data)=>UI.updateGameState(data.state)); socket.on('game:init',(state)=>UI.updateGameState(state)); socket.on('room:updated',(state)=>UI.updateGameState(state)); socket.on('timer:tick',(data)=>UI.updateTimer(data.timeLeft)); socket.on('vote:update',(data)=>UI.updateVoteCounts(data.voteCounts));
     socket.on('action:private',(data)=>{
       if(data?.title==='🤝 Предложение союза'){
-        const state=window.gameState||window.currentGameState||null;
+        const state=UI.currentState||null;
         const match=String(data.message||'').match(/^(.+?) предлагает вам/);
         const senderName=match?.[1];
         const sender=senderName&&state?.players?.find(p=>p.name===senderName);
