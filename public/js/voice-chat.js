@@ -13,19 +13,12 @@ const VoiceChat = {
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:stun1.l.google.com:19302" },
-      // Optional TURN can be configured by deployment without changing code.
-      ...(window.BUNKER_TURN_URL
-        ? [{
-            urls: window.BUNKER_TURN_URL,
-            username: window.BUNKER_TURN_USERNAME,
-            credential: window.BUNKER_TURN_CREDENTIAL,
-          }]
-        : []),
     ],
   },
 
   async init() {
     this.setupUI();
+    await this.loadTurnConfig();
     if (!navigator.mediaDevices?.getUserMedia) return;
 
     try {
@@ -45,6 +38,24 @@ const VoiceChat = {
         muteBtn.innerText = "🎤 Нет доступа";
         muteBtn.disabled = true;
       }
+    }
+  },
+
+  async loadTurnConfig() {
+    try {
+      const response = await fetch("/api/voice-config", {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) return;
+      const config = await response.json();
+      if (Array.isArray(config.iceServers) && config.iceServers.length) {
+        this.rtcConfig = {
+          ...this.rtcConfig,
+          iceServers: [...this.rtcConfig.iceServers, ...config.iceServers],
+        };
+      }
+    } catch (err) {
+      console.warn("[VoiceChat] TURN config unavailable:", err);
     }
   },
 
@@ -142,6 +153,7 @@ const VoiceChat = {
   createPeerConnection(targetId, isInitiator) {
     const pc = new RTCPeerConnection(this.rtcConfig);
     pc.pendingCandidates = [];
+    pc.makingOffer = false;
     this.peers.set(targetId, pc);
 
     this.localStream?.getTracks().forEach((track) => pc.addTrack(track, this.localStream));
@@ -175,12 +187,16 @@ const VoiceChat = {
 
     if (isInitiator) {
       pc.onnegotiationneeded = async () => {
+        if (pc.signalingState !== "stable" || pc.makingOffer) return;
+        pc.makingOffer = true;
         try {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           SocketHandler.sendVoiceSignal(targetId, { sdp: pc.localDescription });
         } catch (e) {
           console.error("[VoiceChat] offer failed:", e);
+        } finally {
+          pc.makingOffer = false;
         }
       };
     }
@@ -194,6 +210,9 @@ const VoiceChat = {
 
     try {
       if (signal.sdp) {
+        if (signal.sdp.type === "offer" && pc.signalingState !== "stable") {
+          await pc.setLocalDescription({ type: "rollback" });
+        }
         await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
         if (signal.sdp.type === "offer") {
           const answer = await pc.createAnswer();
