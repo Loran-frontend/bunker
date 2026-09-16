@@ -44,6 +44,16 @@ function makeGame(count) {
     requirements: {},
   });
 
+  // This is a worst-case envelope: no event loss and no profession water production.
+  const startingWater = mechanics.resources.water;
+  const consumption = [16, 15, 14, 13, 12, 11, 10, 9]
+    .reduce((total, alive) => total + Math.ceil(alive * mechanics.config.resources.waterPerPlayerRound), 0);
+  const theoreticalWater = startingWater - consumption;
+  assert.ok(
+    theoreticalWater / mechanics.maxResources.water >= mechanics.config.resources.criticalThreshold,
+    `configured water envelope reaches ${theoreticalWater}/${mechanics.maxResources.water}`,
+  );
+
   for (let round = 1; round <= 8; round += 1) {
     game.round = round;
     mechanics.applyRoundEnd();
@@ -52,7 +62,9 @@ function makeGame(count) {
   }
 
   assert.ok(mechanics.resources.water > 0, `water reached ${mechanics.resources.water}`);
-  assert.ok(mechanics.resources.water / mechanics.maxResources.water >= 0.2);
+  assert.ok(
+    mechanics.resources.water / mechanics.maxResources.water >= mechanics.config.resources.criticalThreshold,
+  );
 })();
 
 (function traitorActionBudgetRegression() {
