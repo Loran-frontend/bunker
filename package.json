@@ -8,7 +8,7 @@
     "test": "node test/smoke.test.js && node test/game-state.test.js && node test/mechanics.test.js && node test/finale.test.js && node test/balance.test.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "socket.io": "^4.7.5"
+    "express": "^4.22.3",
+    "socket.io": "^4.8.3"
   }
 }
