@@ -7,7 +7,12 @@ const RoomManager=require("./src/logic/RoomManager");
 const GameState=require("./src/logic/GameState");
 const {installGameMechanics}=require("./src/logic/GameMechanics");
 const {installFinaleMechanics}=require("./src/logic/FinaleMechanics");
-const app=express();const server=http.createServer(app);const CLIENT_ORIGIN=process.env.CLIENT_ORIGIN||"*";const corsOrigins=CLIENT_ORIGIN.includes(",")?CLIENT_ORIGIN.split(",").map(o=>o.trim()):CLIENT_ORIGIN;const io=new Server(server,{cors:{origin:corsOrigins,methods:["GET","POST"]}});app.use(express.static(path.join(__dirname,"public")));app.get("/api/health",(req,res)=>res.json({status:"ok",time:new Date().toISOString()}));app.get("/api/voice-config",(req,res)=>{const url=(process.env.TURN_URL||"").trim(),username=process.env.TURN_USERNAME||"",credential=process.env.TURN_CREDENTIAL||"";res.json(url&&username&&credential?{iceServers:[{urls:url,username,credential}]}:{iceServers:[]});});
+const app=express();const server=http.createServer(app);const CLIENT_ORIGIN=process.env.CLIENT_ORIGIN||"*";const corsOrigins=CLIENT_ORIGIN.includes(",")?CLIENT_ORIGIN.split(",").map(o=>o.trim()):CLIENT_ORIGIN;const io=new Server(server,{cors:{origin:corsOrigins,methods:["GET","POST"]}});
+const publicDir=path.join(__dirname,"public");
+app.get("/",(req,res)=>res.sendFile(path.join(publicDir,"start.html")));
+app.get("/game",(req,res)=>res.sendFile(path.join(publicDir,"index.html")));
+app.use(express.static(publicDir));
+app.get("/api/health",(req,res)=>res.json({status:"ok",time:new Date().toISOString()}));app.get("/api/voice-config",(req,res)=>{const url=(process.env.TURN_URL||"").trim(),username=process.env.TURN_USERNAME||"",credential=process.env.TURN_CREDENTIAL||"";res.json(url&&username&&credential?{iceServers:[{urls:url,username,credential}]}:{iceServers:[]});});
 installGameMechanics(GameState);installFinaleMechanics(GameState);const roomManager=new RoomManager(io);
 function getLocalIp(){const interfaces=os.networkInterfaces();for(const name of Object.keys(interfaces))for(const iface of interfaces[name])if(iface.family==="IPv4"&&!iface.internal)return iface.address;return"localhost";}
 function stringValue(value,maxLength=200){if(typeof value!=="string")return"";return value.replace(/[\u0000-\u001F\u007F]/g,"").trim().slice(0,maxLength);}
