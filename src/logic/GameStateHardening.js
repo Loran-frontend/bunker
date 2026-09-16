@@ -1,10 +1,24 @@
 // Runtime hardening for the existing GameState. Kept separate so the core
 // state machine can remain stable while security/edge-case fixes are tested.
 module.exports = function hardenGameState(GameState) {
+  if (GameState.prototype.__hardeningInstalled) return;
+  GameState.prototype.__hardeningInstalled = true;
+
   const originalUseSpecialCard = GameState.prototype.useSpecialCard;
   const originalRemovePlayer = GameState.prototype.removePlayer;
   const originalProcessVotingResults = GameState.prototype.processVotingResults;
   const originalGetSanitizedState = GameState.prototype.getSanitizedState;
+  const originalForceNextPhase = GameState.prototype.forceNextPhase;
+  const originalStartVotingPhase = GameState.prototype.startVotingPhase;
+  const originalStartDiscussionPhase = GameState.prototype.startDiscussionPhase;
+  const originalStartDefensePhase = GameState.prototype.startDefensePhase;
+  const originalProposeAlliance = GameState.prototype.proposeAlliance;
+  const originalAcceptAlliance = GameState.prototype.acceptAlliance;
+  const originalBreakAlliance = GameState.prototype.breakAlliance;
+  const originalUpdateTrust = GameState.prototype.updateTrust;
+  const originalHealPlayer = GameState.prototype.healPlayer;
+  const originalTraitorSabotage = GameState.prototype.traitorSabotage;
+  const originalCheckGameOver = GameState.prototype.checkGameOver;
 
   const isAlive = (game, id) => {
     const player = game.players.get(id);
@@ -17,42 +31,60 @@ module.exports = function hardenGameState(GameState) {
     return !game.specialModifiers.get(id)?.cancelVote;
   };
 
+  const emitError = (game, id, message) => {
+    game.io.to(id).emit('action:private', { title: 'Ошибка', message });
+  };
+
+  const phaseAllowed = (game, phases) => phases.includes(game.status);
+
   const selfAllowedTargetActions = new Set([
-    "cure_health_target",
-    "cure_phobia_target",
+    'cure_health_target',
+    'cure_phobia_target',
   ]);
 
   GameState.prototype.useSpecialCard = function (socketId, category, targetId) {
-    if (this.status !== "DISCUSSION" && this.status !== "VOTING") return;
+    if (!phaseAllowed(this, ['DISCUSSION', 'VOTING'])) {
+      emitError(this, socketId, 'Спец-карты можно использовать только во время обсуждения или голосования.');
+      return { success: false, message: 'Спец-карты сейчас недоступны.' };
+    }
 
     const player = this.players.get(socketId);
     const card = player?.cards?.[category];
     const action = card?.details?.action;
-    if (!player || !card || card.revealed || !action) return;
+    if (!isAlive(this, socketId)) {
+      emitError(this, socketId, 'Выбывший игрок не может использовать игровые действия.');
+      return { success: false, message: 'Выбывший игрок не может использовать игровые действия.' };
+    }
+    if (!player || !card || card.revealed || !action) {
+      emitError(this, socketId, 'Спец-карта недоступна или уже использована.');
+      return { success: false, message: 'Спец-карта недоступна или уже использована.' };
+    }
 
-    if (action.endsWith("_target")) {
+    if (action.endsWith('_target')) {
       if (!targetId || !isAlive(this, targetId) ||
           (targetId === socketId && !selfAllowedTargetActions.has(action))) {
-        this.io.to(socketId).emit("action:private", {
-          title: "Ошибка",
-          message: "Нужно выбрать допустимого живого игрока.",
-        });
-        return;
+        emitError(this, socketId, 'Нужно выбрать допустимого живого игрока.');
+        return { success: false, message: 'Нужно выбрать допустимого живого игрока.' };
       }
     }
 
-    if (action === "cancel_vote_target" || action === "steal_vote_target") {
+    if (action === 'cancel_vote_target' || action === 'steal_vote_target') {
+      if (this.status !== 'VOTING') {
+        emitError(this, socketId, 'Эта карта действует только во время голосования.');
+        return { success: false, message: 'Карта доступна только во время голосования.' };
+      }
       this.votes.delete(targetId);
     }
 
-    originalUseSpecialCard.call(this, socketId, category, targetId);
+    const result = originalUseSpecialCard.call(this, socketId, category, targetId);
 
     if (
-      (action === "cancel_vote_target" || action === "steal_vote_target") &&
-      this.status === "VOTING"
+      (action === 'cancel_vote_target' || action === 'steal_vote_target') &&
+      this.status === 'VOTING'
     ) {
       this.broadcastVoteUpdate();
     }
+    return result;
   };
 
   GameState.prototype.broadcastVoteUpdate = function () {
@@ -67,28 +99,121 @@ module.exports = function hardenGameState(GameState) {
       totalVotes += 1;
     });
 
-    this.io.to(this.roomId).emit("vote:update", { totalVotes, voteCounts });
+    this.io.to(this.roomId).emit('vote:update', { totalVotes, voteCounts });
+  };
+
+  GameState.prototype.startVotingPhase = function (isRevote = false, tiedCandidates = []) {
+    this.__votingResolved = false;
+    return originalStartVotingPhase.call(this, isRevote, tiedCandidates);
+  };
+
+  GameState.prototype.startDiscussionPhase = function () {
+    this.__votingResolved = false;
+    return originalStartDiscussionPhase.call(this);
+  };
+
+  GameState.prototype.startDefensePhase = function (candidates) {
+    this.__votingResolved = false;
+    return originalStartDefensePhase.call(this, candidates);
   };
 
   GameState.prototype.processVotingResults = function () {
-    if (this.status !== "VOTING") return;
+    if (this.status !== 'VOTING' || this.__votingResolved) return false;
+    this.__votingResolved = true;
 
     for (const [voterId, targetId] of this.votes.entries()) {
       if (!hasVotingRights(this, voterId) || !isAlive(this, targetId)) {
         this.votes.delete(voterId);
       }
     }
+
+    // A real contribution to the "Revealer" goal means voting against the
+    // traitor. The goal is only completed later if that traitor is actually
+    // eliminated, so a random accusation is not enough by itself.
+    if (this.traitorId && this.mechanics) {
+      for (const [voterId, targetId] of this.votes.entries()) {
+        if (voterId !== this.traitorId && targetId === this.traitorId && this.mechanics.goalProgress[voterId]) {
+          this.mechanics.goalProgress[voterId].votedAgainstTraitor = true;
+        }
+      }
+    }
+
     return originalProcessVotingResults.call(this);
   };
 
+  GameState.prototype.castVote = (function (originalCastVote) {
+    return function (voterId, targetId) {
+      if (this.status !== 'VOTING') return;
+      if (this.__votingResolved) return;
+      return originalCastVote.call(this, voterId, targetId);
+    };
+  })(GameState.prototype.castVote);
+
+  GameState.prototype.forceNextPhase = function (socketId) {
+    const player = this.players.get(socketId);
+    if (!player || !player.isHost) {
+      emitError(this, socketId, 'Только хост может управлять переходом фазы.');
+      return { success: false, message: 'Только хост может управлять переходом фазы.' };
+    }
+
+    // Manual skip is intentionally limited to transitions that cannot bypass
+    // an unresolved player decision. In particular, reveal cannot be skipped
+    // until every living player has revealed a card.
+    if (this.status === 'REVEAL') {
+      if (this.revealedThisRound.size < this.getAlivePlayers().length) {
+        emitError(this, socketId, 'Нельзя пропустить раскрытие: не все живые игроки раскрыли карту.');
+        return { success: false, message: 'Нельзя пропустить раскрытие: не все живые игроки раскрыли карту.' };
+      }
+      return originalForceNextPhase.call(this, socketId);
+    }
+    if (this.status === 'DISCUSSION') return originalForceNextPhase.call(this, socketId);
+    if (this.status === 'VOTING') return originalForceNextPhase.call(this, socketId);
+    if (this.status === 'DEFENSE') return originalForceNextPhase.call(this, socketId);
+
+    emitError(this, socketId, 'На этой фазе ручной переход недоступен.');
+    return { success: false, message: 'На этой фазе ручной переход недоступен.' };
+  };
+
+  GameState.prototype.proposeAlliance = function (fromId, toId) {
+    if (!phaseAllowed(this, ['DISCUSSION'])) return { success: false, message: 'Союзы можно заключать только во время обсуждения.' };
+    return originalProposeAlliance.call(this, fromId, toId);
+  };
+
+  GameState.prototype.acceptAlliance = function (toId, fromId) {
+    if (!phaseAllowed(this, ['DISCUSSION'])) return { success: false, message: 'Предложения союзов принимаются только во время обсуждения.' };
+    const proposal = this.getMechanics?.()?.allianceProposals?.get(`${fromId}:${toId}`);
+    if (!proposal || proposal.round !== this.round) return { success: false, message: 'Предложение союза истекло.' };
+    return originalAcceptAlliance.call(this, toId, fromId);
+  };
+
+  GameState.prototype.breakAlliance = function (playerId, allianceId) {
+    if (!phaseAllowed(this, ['DISCUSSION'])) return { success: false, message: 'Союз можно разорвать только во время обсуждения.' };
+    return originalBreakAlliance.call(this, playerId, allianceId);
+  };
+
+  GameState.prototype.updateTrust = function (fromId, toId, delta) {
+    if (!phaseAllowed(this, ['DISCUSSION'])) return { success: false, message: 'Доверие можно изменять только во время обсуждения.' };
+    return originalUpdateTrust.call(this, fromId, toId, delta);
+  };
+
+  GameState.prototype.healPlayer = function (healerId, targetId) {
+    if (!phaseAllowed(this, ['DISCUSSION'])) return { success: false, message: 'Лечение доступно только во время обсуждения.' };
+    return originalHealPlayer.call(this, healerId, targetId);
+  };
+
+  GameState.prototype.traitorSabotage = function (actorId, action) {
+    if (!phaseAllowed(this, ['DISCUSSION'])) return { success: false, message: 'Саботаж можно совершать только во время обсуждения.' };
+    return originalTraitorSabotage.call(this, actorId, action);
+  };
+
   GameState.prototype.removePlayer = function (socketId) {
-    const wasDefense = this.status === "DEFENSE";
+    const wasDefense = this.status === 'DEFENSE';
     const wasSpeaker = this.defenseSpeakerId === socketId;
     const wasCandidate = this.tiedCandidates.includes(socketId);
 
     originalRemovePlayer.call(this, socketId);
 
-    if (this.status !== "DEFENSE") return;
+    if (this.status !== 'DEFENSE') return;
 
     this.tiedCandidates = this.tiedCandidates.filter((id) => isAlive(this, id));
 
@@ -107,9 +232,25 @@ module.exports = function hardenGameState(GameState) {
     }
   };
 
-  const originalCheckGameOver = GameState.prototype.checkGameOver;
+  const originalGetMechanics = GameState.prototype.getMechanics;
+  GameState.prototype.getMechanics = function () {
+    const mechanics = originalGetMechanics.call(this);
+    if (mechanics && !mechanics.__hardeningDefaultsApplied) {
+      mechanics.__hardeningDefaultsApplied = true;
+      const originalInit = mechanics.initForGame.bind(mechanics);
+      mechanics.initForGame = function () {
+        const result = originalInit();
+        Object.values(this.goalProgress).forEach((progress) => {
+          progress.votedAgainstTraitor = false;
+        });
+        return result;
+      };
+    }
+    return mechanics;
+  };
+
   GameState.prototype.checkGameOver = function () {
-    if (this.status === "GAME_OVER") return true;
+    if (this.status === 'GAME_OVER') return true;
     return originalCheckGameOver.call(this);
   };
 
@@ -122,79 +263,9 @@ module.exports = function hardenGameState(GameState) {
       });
     });
 
-    // The mechanics layer owns its private/public expansion state. Merge it only
-    // after the base GameState has been sanitized so secret goals, traitor
-    // actions and private relations never leak to another socket.
-    if (typeof this.getMechanics === "function" && this.mechanics) {
+    if (typeof this.getMechanics === 'function' && this.mechanics) {
       return this.getMechanics().sanitize(state, forSocketId);
     }
     return state;
-  };
-
-  GameState.prototype.generateAiFinaleStory = async function (survivors, hasTraitor) {
-    const survivorDetails = survivors
-      .map((s) => {
-        const prof = s.cards?.professions?.value || "Неизвестно";
-        const health = s.cards?.health?.value || "Неизвестно";
-        const inv = s.cards?.inventory?.value || "Неизвестно";
-        return `${s.name} (Профессия: ${prof}, Здоровье: ${health}, Инвентарь: ${inv}${s.isTraitor ? " [СЕКРЕТНЫЙ ПРЕДАТЕЛЬ]" : ""})`;
-      })
-      .join("\n");
-
-    const prompt = `Ты — ведущий атмосферной настольной постапокалиптической игры "Бункер".
-Катастрофа: ${this.disaster?.title || "Ядерная зима"}: ${this.disaster?.desc || ""}.
-Описание бункера: ${this.bunker?.title || "Стандартный бункер"}: ${this.bunker?.desc || ""}.
-
-Список выживших:
-${survivorDetails}
-
-Предатель среди выживших: ${hasTraitor ? "ДА" : "НЕТ"}.
-Напиши атмосферный рассказ на русском языке о судьбе группы спустя год.
-${hasTraitor ? "Предатель саботирует бункер, и он терпит крах." : "Предателя нет, поэтому группа успешно выживает."}
-В конце напиши: ПОБЕДА САБОТАЖНИКА или ПОБЕДА ВЫЖИВШИХ.`;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
-    try {
-      if (process.env.GEMINI_API_KEY) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-        });
-        if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
-        const data = await res.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) throw new Error("Gemini returned no story");
-        return text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
-      }
-
-      if (process.env.GROQ_API_KEY) {
-        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          },
-          signal: controller.signal,
-          body: JSON.stringify({
-            model: "llama-3.1-70b-versatile",
-            messages: [{ role: "user", content: prompt }],
-          }),
-        });
-        if (!res.ok) throw new Error(`Groq HTTP ${res.status}`);
-        const data = await res.json();
-        const text = data.choices?.[0]?.message?.content;
-        if (!text) throw new Error("Groq returned no story");
-        return text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
-      }
-
-      throw new Error("No AI provider configured");
-    } finally {
-      clearTimeout(timeout);
-    }
   };
 };
