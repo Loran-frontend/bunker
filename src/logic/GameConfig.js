@@ -7,7 +7,7 @@ module.exports = {
     electricityPerCapacity: 4,
     startingRatio: 0.9,
     foodPerPlayerRound: 0.65,
-    waterPerPlayerRound: 0.75,
+    waterPerPlayerRound: 0.65,
     electricityPerRound: 4,
     medicinePerTreatment: 1,
     criticalThreshold: 0.2,
@@ -20,7 +20,7 @@ module.exports = {
   },
   events: { enabled: true, severityScale: 1, maxSeverity: 3 },
   traitor: {
-    maxActions: 3,
+    maxActions: 2,
     cooldownRounds: 1,
     actions: {
       sabotageElectricity: 1,
