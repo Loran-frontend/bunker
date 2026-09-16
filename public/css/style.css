@@ -191,6 +191,7 @@ header {
   border-radius: 10px !important;
   box-shadow: 0 24px 70px rgba(0,0,0,.55) !important;
 }
+#join-modal h1 { color: #e0a647 !important; }
 #action-target-list {
   min-height: 0;
   overscroll-behavior: contain;
