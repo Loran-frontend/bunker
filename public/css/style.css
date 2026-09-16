@@ -1,31 +1,244 @@
-/* Custom styling for dark post-apocalyptic bunker interface */
+/* BUNKER UI SYSTEM — information first, atmosphere second */
+:root {
+  --bunker-bg: #080a0b;
+  --bunker-surface: #101416;
+  --bunker-surface-2: #151a1d;
+  --bunker-border: #293136;
+  --bunker-border-strong: #3b454b;
+  --bunker-text: #e7e9e8;
+  --bunker-muted: #8d989b;
+  --bunker-accent: #d69a32;
+  --bunker-accent-soft: #3a2b16;
+  --bunker-danger: #c9544f;
+  --bunker-success: #4f9b72;
+  --bunker-info: #6689a8;
+}
+
+* { box-sizing: border-box; }
+
+html, body { min-height: 100%; }
+
 body {
   user-select: none;
   touch-action: manipulation;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(214,154,50,.07), transparent 38%),
+    linear-gradient(180deg, #090b0c 0%, var(--bunker-bg) 100%) !important;
+  color: var(--bunker-text);
+  letter-spacing: .005em;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+button, input { font: inherit; }
+button { min-height: 36px; }
+button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--bunker-accent) !important;
+  outline-offset: 2px;
 }
-::-webkit-scrollbar-track {
-  background: #0f172a;
+button:disabled { cursor: not-allowed; opacity: .48; filter: saturate(.55); }
+
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: #0b0e10; }
+::-webkit-scrollbar-thumb { background: #30383d; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #475158; }
+
+/* Header = orientation layer */
+header {
+  background: rgba(8,10,11,.96) !important;
+  border-color: var(--bunker-border) !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,.02), 0 8px 24px rgba(0,0,0,.18);
+  z-index: 10;
 }
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
+#phase-badge {
+  background: #15191b !important;
+  color: #c8ced0 !important;
+  border-color: var(--bunker-border-strong) !important;
+  border-radius: 6px !important;
+  letter-spacing: .04em;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+#room-code-badge { background: #17130d !important; border-color: #6b4b1d !important; }
+#timer-box {
+  background: #17130d !important;
+  border-color: #76531f !important;
+  border-radius: 7px !important;
+  min-width: 84px;
+  text-align: center;
 }
 
-.mobile-nav-btn.active {
-  color: #f59e0b;
+/* Desktop information architecture: decision center, context left, people right */
+@media (min-width: 768px) {
+  main {
+    display: grid !important;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 330px);
+    min-height: 0;
+  }
+  #tab-bunker { order: 1; width: auto !important; border-right: 1px solid var(--bunker-border) !important; }
+  #tab-my-cards { order: 2; width: auto !important; border-right: 1px solid var(--bunker-border) !important; }
+  #tab-players { order: 3; width: auto !important; }
+  #tab-bunker, #tab-my-cards, #tab-players {
+    min-width: 0;
+    background: transparent !important;
+  }
 }
 
+/* Section framing */
+#tab-my-cards { background: rgba(13,16,18,.72) !important; }
+#tab-bunker, #tab-players { background: rgba(9,12,13,.76) !important; }
+#tab-my-cards > h2, #tab-players > h2 {
+  color: #d5d9d9 !important;
+  font-size: 12px !important;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  border-bottom: 1px solid var(--bunker-border);
+  padding-bottom: 9px;
+}
+#my-status-tag { color: var(--bunker-muted) !important; }
+
+/* The current decision is the visual anchor */
+#turn-banner {
+  min-height: 52px;
+  padding: 12px 14px !important;
+  background: linear-gradient(90deg, rgba(214,154,50,.13), rgba(214,154,50,.04)) !important;
+  border: 1px solid rgba(214,154,50,.48) !important;
+  border-left: 3px solid var(--bunker-accent) !important;
+  border-radius: 7px !important;
+  box-shadow: 0 8px 20px rgba(0,0,0,.16);
+}
+#turn-banner-text { color: #f0c16d !important; font-size: 13px; }
+
+#traitor-banner {
+  background: rgba(92,25,22,.24) !important;
+  border-color: rgba(201,84,79,.7) !important;
+  border-left: 3px solid var(--bunker-danger) !important;
+  box-shadow: none !important;
+}
+#host-settings-panel {
+  background: var(--bunker-surface) !important;
+  border-color: #5e451e !important;
+  box-shadow: none !important;
+}
+
+/* Cards: explicit states, no decorative noise */
+#my-cards-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 10px !important; }
 .card-item {
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  min-height: 145px;
+  padding: 13px !important;
+  background: var(--bunker-surface) !important;
+  border-color: var(--bunker-border) !important;
+  border-radius: 8px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
 }
-.card-item:hover {
-  transform: translateY(-2px);
+.card-item:hover { transform: translateY(-1px); border-color: var(--bunker-border-strong) !important; }
+.card-item:has(button) { border-color: #695020 !important; }
+.card-item button { margin-top: 12px !important; border-radius: 6px !important; font-size: 11px !important; font-weight: 800 !important; }
+.card-item .text-\[10px\] { color: #879195 !important; }
+.card-item .text-amber-400 { color: #e3ae55 !important; font-size: 13px !important; }
+.card-item .text-gray-400 { color: #a0aaad !important; line-height: 1.45; }
+
+/* Reduce Tailwind's loud status colors */
+#tab-bunker h3 { color: #b8c0c2 !important; font-size: 11px !important; letter-spacing: .11em; }
+#disaster-card, #bunker-card {
+  background: var(--bunker-surface) !important;
+  border-color: var(--bunker-border) !important;
+  border-radius: 8px !important;
+}
+#disaster-title { color: #d77a70 !important; }
+#bunker-title { color: #75a988 !important; }
+#bunker-capacity { color: #d6a34a !important; }
+
+/* Players: scan-friendly, action-ready */
+#players-list { padding-right: 2px; }
+#players-list > div {
+  background: var(--bunker-surface) !important;
+  border-color: var(--bunker-border) !important;
+  border-radius: 8px !important;
+  padding: 11px !important;
+}
+#players-list > div:hover { border-color: var(--bunker-border-strong) !important; }
+#players-list button {
+  border-radius: 6px !important;
+  min-height: 32px;
+  font-size: 10px !important;
+}
+#players-list .border-t { border-color: #252c30 !important; }
+
+/* Chat/logs: tertiary, visually quieter */
+#game-logs {
+  background: #0a0d0f !important;
+  border-color: var(--bunker-border) !important;
+  color: #889397 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+}
+#chat-input { background: #111517 !important; border: 0 !important; min-height: 38px; }
+#chat-send-btn { min-height: 38px; border-radius: 0 6px 6px 0 !important; }
+
+/* Modals = decisions, not notifications */
+#join-modal > div, #action-modal > div, #private-modal > div, #finale-modal > div {
+  background: #111517 !important;
+  border-color: var(--bunker-border-strong) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 24px 70px rgba(0,0,0,.55) !important;
+}
+#join-modal h1 { color: #e0a647 !important; }
+#action-target-list button {
+  background: #191e21 !important;
+  border: 1px solid var(--bunker-border) !important;
+}
+#action-target-list button:hover { background: #27241d !important; border-color: #80602b !important; color: #f0c16d !important; }
+
+/* Mobile is a different composition, not a shrunken desktop */
+@media (max-width: 767px) {
+  body { overflow: hidden !important; }
+  header { height: 58px !important; padding: 7px 10px !important; }
+  header h1 { display: none !important; }
+  header > div:first-child { min-width: 0; overflow: hidden; }
+  #phase-badge { max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #room-code-badge { display: none !important; }
+  #voice-controls { display: none !important; }
+  #host-start-btn, #host-next-btn { min-height: 34px; padding-inline: 9px !important; }
+  #timer-box { min-width: 72px; font-size: 15px !important; }
+
+  main { min-height: 0; }
+  .tab-content { padding: 10px !important; border: 0 !important; }
+  #my-cards-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; gap: 8px !important; }
+  .card-item { min-height: 132px; padding: 11px !important; }
+  #turn-banner { margin-bottom: 10px !important; }
+  #turn-banner-text { font-size: 12px; line-height: 1.35; }
+  #my-status-tag { max-width: 48%; text-align: right; line-height: 1.25; }
+
+  .mobile-nav-btn {
+    min-height: 50px !important;
+    border-radius: 7px;
+    color: #7d878b !important;
+  }
+  .mobile-nav-btn.active {
+    color: #e0a647 !important;
+    background: #19150f !important;
+  }
+  nav { background: #090b0c !important; border-color: var(--bunker-border) !important; padding: 5px !important; gap: 4px; }
+
+  #tab-bunker, #tab-players { min-height: 0; }
+  #game-logs { min-height: 160px !important; }
+  #players-list > div { padding: 10px !important; }
+}
+
+@media (max-width: 374px) {
+  #my-cards-grid { grid-template-columns: 1fr !important; }
+  .card-item { min-height: 112px; }
+  #phase-badge { max-width: 40vw; }
+  #host-next-btn { font-size: 10px !important; }
+}
+
+/* Small landscape phones: preserve a usable decision area */
+@media (max-width: 767px) and (orientation: landscape) {
+  header { height: 52px !important; }
+  #my-cards-grid { grid-template-columns: repeat(3, minmax(0,1fr)) !important; }
+  .card-item { min-height: 110px; }
+  nav { height: 48px !important; }
+  .mobile-nav-btn { min-height: 40px !important; }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
