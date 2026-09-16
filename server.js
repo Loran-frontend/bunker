@@ -3,17 +3,19 @@ const http=require("http");
 const {Server}=require("socket.io");
 const os=require("os");
 const path=require("path");
+const fs=require("fs");
 const RoomManager=require("./src/logic/RoomManager");
 const GameState=require("./src/logic/GameState");
 const {installGameMechanics}=require("./src/logic/GameMechanics");
 const {installFinaleMechanics}=require("./src/logic/FinaleMechanics");
+const installHostGameSettings=require("./src/logic/HostGameSettingsHardening");
 const app=express();const server=http.createServer(app);const CLIENT_ORIGIN=process.env.CLIENT_ORIGIN||"*";const corsOrigins=CLIENT_ORIGIN.includes(",")?CLIENT_ORIGIN.split(",").map(o=>o.trim()):CLIENT_ORIGIN;const io=new Server(server,{cors:{origin:corsOrigins,methods:["GET","POST"]}});
 const publicDir=path.join(__dirname,"public");
 app.get("/",(req,res)=>res.sendFile(path.join(publicDir,"start.html")));
-app.get("/game",(req,res)=>res.sendFile(path.join(publicDir,"index.html")));
+app.get("/game",(req,res)=>fs.readFile(path.join(publicDir,"index.html"),"utf8",(error,html)=>{if(error)return res.status(500).send("Не удалось загрузить игру.");res.type("html").send(html.replace("</body>","<script src=\"/js/host-settings.js\"></script></body>"));}));
 app.use(express.static(publicDir));
 app.get("/api/health",(req,res)=>res.json({status:"ok",time:new Date().toISOString()}));app.get("/api/voice-config",(req,res)=>{const url=(process.env.TURN_URL||"").trim(),username=process.env.TURN_USERNAME||"",credential=process.env.TURN_CREDENTIAL||"";res.json(url&&username&&credential?{iceServers:[{urls:url,username,credential}]}:{iceServers:[]});});
-installGameMechanics(GameState);installFinaleMechanics(GameState);const roomManager=new RoomManager(io);
+installGameMechanics(GameState);installFinaleMechanics(GameState);installHostGameSettings(GameState);const roomManager=new RoomManager(io);
 function getLocalIp(){const interfaces=os.networkInterfaces();for(const name of Object.keys(interfaces))for(const iface of interfaces[name])if(iface.family==="IPv4"&&!iface.internal)return iface.address;return"localhost";}
 function stringValue(value,maxLength=200){if(typeof value!=="string")return"";return value.replace(/[\u0000-\u001F\u007F]/g,"").trim().slice(0,maxLength);}
 function playerName(value){return stringValue(value,32).replace(/[<>]/g,"");}
@@ -30,7 +32,7 @@ io.on("connection",socket=>{
  }
  socket.on("room:create",payload=>{if(!allowEvent(socket.id,"room",5,10000))return;const name=playerName(payload?.name);if(!name)return socket.emit("error:msg","Введите имя игрока.");const{res}=roomManager.createRoom(socket,name);if(!res.success)socket.emit("error:msg",res.message);});
  socket.on("room:join",payload=>{if(!allowEvent(socket.id,"room",5,10000))return;const name=playerName(payload?.name),roomId=stringValue(payload?.roomId,20);if(!name||!roomId)return socket.emit("error:msg","Укажите имя и код комнаты.");const res=roomManager.joinRoom(socket,roomId,name);if(!res.success)socket.emit("error:msg",res.message);});
- socket.on("room:settings",payload=>{if(!allowEvent(socket.id,"settings",10,10000))return;const room=roomManager.getRoomBySocket(socket.id),playerId=roomManager.getPlayerIdBySocket(socket.id);if(room&&playerId&&typeof payload?.traitorModeEnabled==="boolean")room.updateSettings(playerId,{traitorModeEnabled:payload.traitorModeEnabled});});
+ socket.on("room:settings",payload=>{if(!allowEvent(socket.id,"settings",10,10000))return;const room=roomManager.getRoomBySocket(socket.id),playerId=roomManager.getPlayerIdBySocket(socket.id);if(!room||!playerId)return socket.emit("error:msg","Комната не найдена.");const result=room.updateSettings(playerId,payload);if(!result.success)socket.emit("error:msg",result.message);});
  socket.on("chat:message",payload=>{if(!allowEvent(socket.id,"chat",6,10000))return;const room=roomManager.getRoomBySocket(socket.id),playerId=roomManager.getPlayerIdBySocket(socket.id),text=stringValue(payload?.text,500);if(room&&playerId&&text)room.addChatMessage(playerId,text);});
  socket.on("game:start",()=>{if(!allowEvent(socket.id,"game",5,10000))return;const room=roomManager.getRoomBySocket(socket.id),playerId=roomManager.getPlayerIdBySocket(socket.id);if(room&&playerId){const res=room.startGame(playerId);if(!res.success)socket.emit("error:msg",res.message);}});
  socket.on("game:next_phase",()=>{if(!allowEvent(socket.id,"phase",10,10000))return;const room=roomManager.getRoomBySocket(socket.id),playerId=roomManager.getPlayerIdBySocket(socket.id);if(room&&playerId)room.forceNextPhase(playerId);});

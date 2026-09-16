@@ -3,6 +3,7 @@ const GameState = require('./GameState');
 const { installGameMechanics } = require('./GameMechanics');
 const hardenGameState = require('./GameStateHardening');
 const Config = require('./GameConfig');
+const RoomConfig = require('./GameRoomConfig');
 
 installGameMechanics(GameState);
 hardenGameState(GameState);
@@ -26,7 +27,10 @@ class RoomManager {
 
   createRoom(socket,playerName){
     if(this.playerRoomMap.has(socket.id))return{roomId:this.playerRoomMap.get(socket.id),res:{success:false,message:'Вы уже находитесь в комнате.'}};
-    const roomId=this.generateRoomCode(),gameState=new GameState(this.io,roomId);this.rooms.set(roomId,gameState);
+    const roomId=this.generateRoomCode(),gameState=new GameState(this.io,roomId);
+    gameState.gameConfig = RoomConfig.createRoomConfig();
+    gameState.traitorModeEnabled = gameState.gameConfig.traitorModeEnabled;
+    this.rooms.set(roomId,gameState);
     const playerId=this.generatePlayerId(),sessionId=this.createSession(roomId,playerId,socket.id),res=gameState.addPlayer(playerId,playerName);
     if(res.success){this.attachSocket(socket,roomId,playerId);socket.emit('room:created',{roomId,state:gameState.getSanitizedState(playerId)});this.emitSessionIssued(socket,sessionId,playerId);gameState.broadcastState();}
     else{this.sessions.delete(sessionId);this.playerSocketMap.delete(playerId);this.rooms.delete(roomId);}
