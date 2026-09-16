@@ -11,6 +11,15 @@ const categoryNames = {
   special2: "Спец-карта",
 };
 
+const phaseNames = {
+  LOBBY: "Лобби",
+  REVEAL: "Раскрытие",
+  DISCUSSION: "Дискуссия",
+  VOTING: "Голосование",
+  DEFENSE: "Защитная речь",
+  GAME_OVER: "Финал",
+};
+
 const escapeHtml = (value) =>
   String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -70,12 +79,12 @@ const UI = {
     }
 
     const badge = document.getElementById("phase-badge");
-    if (state.status === "LOBBY") badge.innerText = `Лобби (${state.players.length}/16)`;
-    else if (state.status === "REVEAL") badge.innerText = `Раунд ${state.round}: Раскрытие карт`;
-    else if (state.status === "DISCUSSION") badge.innerText = `Раунд ${state.round}: Дискуссия`;
-    else if (state.status === "VOTING") badge.innerText = `Раунд ${state.round}: Голосование`;
-    else if (state.status === "DEFENSE") badge.innerText = "Защитная речь (30 сек)";
-    else if (state.status === "GAME_OVER") badge.innerText = "Игра Завершена";
+    if (state.status === "LOBBY") badge.innerText = `Лобби · ${state.players.length}/16`;
+    else if (state.status === "REVEAL") badge.innerText = `Раунд ${state.round} · Раскрытие`;
+    else if (state.status === "DISCUSSION") badge.innerText = `Раунд ${state.round} · Дискуссия`;
+    else if (state.status === "VOTING") badge.innerText = `Раунд ${state.round} · Голосование`;
+    else if (state.status === "DEFENSE") badge.innerText = "Защитная речь · 30 сек";
+    else if (state.status === "GAME_OVER") badge.innerText = "Финал";
 
     const isHost = socket.id === state.hostId;
     const startBtn = document.getElementById("host-start-btn");
@@ -110,19 +119,37 @@ const UI = {
 
     const turnBanner = document.getElementById("turn-banner");
     const turnText = document.getElementById("turn-banner-text");
+    const statusTag = document.getElementById("my-status-tag");
     if (state.status === "REVEAL" && state.activePlayerName) {
       turnBanner.classList.remove("hidden");
-      turnText.innerText = state.activePlayerId === socket.id
-        ? "👉 ВАШ ХОД! Выберите и откройте 1 характеристику ниже."
-        : `⏳ Ход игрока ${state.activePlayerName} (открывает карту)...`;
+      const mine = state.activePlayerId === socket.id;
+      turnText.innerText = mine
+        ? "ВАШЕ РЕШЕНИЕ · Откройте одну характеристику"
+        : `ХОД ИГРОКА · ${state.activePlayerName}`;
+      statusTag.innerText = mine ? "Сейчас можно открыть 1 карту" : "Ожидание своего хода";
+    } else if (state.status === "DISCUSSION") {
+      turnBanner.classList.remove("hidden");
+      turnText.innerText = "ОБЩЕЕ ОБСУЖДЕНИЕ · Определите, кто должен остаться в бункере";
+      statusTag.innerText = "Слушайте аргументы и сравнивайте игроков";
+    } else if (state.status === "VOTING") {
+      turnBanner.classList.remove("hidden");
+      turnText.innerText = this.hasVotedThisRound
+        ? "ВАШ ВЫБОР СОХРАНЁН · Ждём остальных"
+        : "ВАШЕ РЕШЕНИЕ · Выберите игрока для исключения";
+      statusTag.innerText = this.hasVotedThisRound ? "Голос отдан" : "Выберите кандидата";
     } else if (state.status === "DEFENSE" && state.defenseSpeakerId) {
       turnBanner.classList.remove("hidden");
       const speaker = state.players.find((p) => p.id === state.defenseSpeakerId);
       turnText.innerText = state.defenseSpeakerId === socket.id
-        ? "🎙️ ВАША ЗАЩИТНАЯ РЕЧЬ! (30 сек)"
-        : `🎙️ Защитная речь: ${speaker?.name || "Кандидат"} (остальные микрофоны приглушены)`;
+        ? "ВАШЕ РЕШЕНИЕ · Защитите себя за 30 секунд"
+        : `ЗАЩИТНАЯ РЕЧЬ · ${speaker?.name || "Кандидат"}`;
+      statusTag.innerText = state.defenseSpeakerId === socket.id ? "Говорите коротко и по делу" : "Слушайте аргументы кандидата";
+    } else if (state.status === "LOBBY") {
+      turnBanner.classList.add("hidden");
+      statusTag.innerText = isHost ? "Настройте комнату и запустите игру" : "Ожидаем старта хоста";
     } else {
       turnBanner.classList.add("hidden");
+      statusTag.innerText = phaseNames[state.status] || "Ожидание";
     }
 
     this.renderMyCards(me, state);
@@ -138,7 +165,7 @@ const UI = {
     if (!me || !me.cards) {
       const empty = document.createElement("div");
       empty.className = "col-span-full text-center text-gray-500 py-8";
-      empty.innerText = "Ожидание раздачи карт...";
+      empty.innerText = "Карты будут выданы после старта игры.";
       grid.appendChild(empty);
       return;
     }
@@ -149,9 +176,13 @@ const UI = {
     Object.keys(me.cards).forEach((cat) => {
       const card = me.cards[cat];
       const cardEl = document.createElement("div");
-      const isRevealed = card.revealed;
+      const isRevealed = !!card.revealed;
       const isSpecial = cat === "special1" || cat === "special2";
-      cardEl.className = `card-item border rounded-lg p-2.5 flex flex-col justify-between text-xs transition duration-200 ${isRevealed ? "bg-gray-800/90 border-amber-600/70" : "bg-gray-950 border-gray-800 hover:border-gray-700"}`;
+      const canReveal = !isRevealed && !isSpecial && isMyTurnToReveal;
+      const canUse = !isRevealed && isSpecial && isDiscussionOrVoting;
+      const stateClass = isRevealed ? "is-revealed" : canReveal || canUse ? "is-available" : "is-hidden";
+      cardEl.className = `card-item ${stateClass} border rounded-lg p-2.5 flex flex-col justify-between text-xs transition duration-200`;
+      cardEl.setAttribute("data-card-state", isRevealed ? "revealed" : canReveal || canUse ? "usable" : "hidden");
 
       const body = document.createElement("div");
       const label = document.createElement("div");
@@ -170,33 +201,35 @@ const UI = {
       cardEl.appendChild(body);
 
       if (!isRevealed) {
-        if (isSpecial && isDiscussionOrVoting) {
+        if (canUse) {
           const button = document.createElement("button");
           button.className = "mt-2 w-full py-1 bg-purple-700 hover:bg-purple-600 font-bold rounded text-white text-[11px]";
-          button.innerText = "Применить";
+          button.innerText = "Использовать спец-карту";
+          button.setAttribute("aria-label", `Использовать ${categoryNames[cat]}`);
           button.onclick = () => this.handleSpecialCardClick(cat);
           cardEl.appendChild(button);
         } else if (isSpecial) {
           const hint = document.createElement("span");
           hint.className = "mt-2 text-[10px] text-purple-400/70 text-center font-mono";
-          hint.innerText = "Спец-карта";
+          hint.innerText = "Доступна во время дискуссии";
           cardEl.appendChild(hint);
-        } else if (isMyTurnToReveal) {
+        } else if (canReveal) {
           const button = document.createElement("button");
           button.className = "mt-2 w-full py-1 bg-amber-600 hover:bg-amber-500 font-bold rounded text-black text-[11px] animate-pulse";
-          button.innerText = "Открыть карту";
+          button.innerText = "Открыть эту карту";
+          button.setAttribute("aria-label", `Открыть ${categoryNames[cat]}`);
           button.onclick = () => SocketHandler.revealCard(cat);
           cardEl.appendChild(button);
         } else {
           const hint = document.createElement("span");
           hint.className = "mt-2 text-[10px] text-gray-500 text-center font-mono";
-          hint.innerText = "Ждите своего хода";
+          hint.innerText = "Недоступно сейчас";
           cardEl.appendChild(hint);
         }
       } else {
         const hint = document.createElement("span");
         hint.className = "mt-2 text-[10px] text-amber-500/80 font-mono text-center";
-        hint.innerText = "Открыто";
+        hint.innerText = "РАСКРЫТО";
         cardEl.appendChild(hint);
       }
 
@@ -222,7 +255,7 @@ const UI = {
     this.currentState.players.filter((p) => !p.eliminated).forEach((p) => {
       const btn = document.createElement("button");
       btn.className = "w-full py-2 bg-gray-700 hover:bg-amber-600 hover:text-black rounded text-sm text-gray-200 font-medium transition mb-1";
-      btn.innerText = p.id === socket.id ? `${p.name} (На себя)` : p.name;
+      btn.innerText = p.id === socket.id ? `${p.name} (Вы)` : p.name;
       btn.onclick = () => {
         SocketHandler.useCardAction(cat, p.id);
         modal.classList.add("hidden");
@@ -252,15 +285,16 @@ const UI = {
       const isVoting = state?.status === "VOTING" && me && !me.eliminated && !p.eliminated && !this.hasVotedThisRound;
       const isSpeaking = this.speakingPlayers.has(p.id);
       const pEl = document.createElement("div");
-      pEl.className = `p-2.5 rounded-lg border text-xs space-y-1.5 transition-all ${p.eliminated ? "bg-red-950/20 border-red-900/40 opacity-60" : isSpeaking ? "bg-amber-950/40 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" : isSelf ? "bg-amber-950/20 border-amber-600/60" : "bg-gray-800/60 border-gray-700"}`;
+      pEl.className = `player-card ${p.eliminated ? "is-eliminated" : isSpeaking ? "is-speaking" : isSelf ? "is-self" : ""}`;
+      pEl.setAttribute("data-player-state", p.eliminated ? "eliminated" : isSelf ? "self" : "active");
 
       const header = document.createElement("div");
-      header.className = "flex items-center justify-between";
+      header.className = "flex items-center justify-between gap-2";
       const name = document.createElement("span");
       name.className = `font-bold text-sm ${p.eliminated ? "line-through text-red-500" : "text-gray-200"}`;
-      name.innerText = `${isSpeaking ? "🗣️ " : ""}${p.name} ${p.isHost ? "👑" : ""} ${isSelf ? "(Вы)" : ""}`;
+      name.innerText = `${isSpeaking ? "Говорит · " : ""}${p.name}${p.isHost ? " · Хост" : ""}${isSelf ? " · Вы" : ""}`;
       const actions = document.createElement("div");
-      actions.className = "flex items-center space-x-2";
+      actions.className = "flex items-center space-x-2 shrink-0";
       const voteCount = document.createElement("span");
       voteCount.id = `vote-count-${p.id}`;
       voteCount.className = "text-xs font-bold text-red-400";
@@ -268,7 +302,8 @@ const UI = {
       if (isVoting && !isSelf) {
         const voteBtn = document.createElement("button");
         voteBtn.className = "px-2 py-1 bg-red-700 hover:bg-red-600 font-bold text-white rounded text-[10px]";
-        voteBtn.innerText = "Голосовать";
+        voteBtn.innerText = "Исключить";
+        voteBtn.setAttribute("aria-label", `Проголосовать против ${p.name}`);
         voteBtn.onclick = () => this.handleVoteClick(p.id);
         actions.appendChild(voteBtn);
       }
@@ -283,7 +318,7 @@ const UI = {
         badge.className = "inline-block px-1.5 py-0.5 rounded text-[10px] bg-gray-900 text-gray-500";
         if (card.isPrivateReveal) badge.className = "inline-block px-1.5 py-0.5 rounded text-[10px] bg-purple-900/40 text-purple-300 border border-purple-700/50";
         else if (card.revealed) badge.className = "inline-block px-1.5 py-0.5 rounded text-[10px] bg-amber-900/40 text-amber-300 border border-amber-700/50";
-        badge.innerText = `${categoryNames[cat] || cat}: ${card.value}`;
+        badge.innerText = card.revealed || card.isPrivateReveal ? `${categoryNames[cat] || cat}: ${card.value}` : `${categoryNames[cat] || cat}: скрыто`;
         cardsWrap.appendChild(badge);
       });
       pEl.appendChild(cardsWrap);
@@ -304,14 +339,17 @@ const UI = {
     if (!voteCounts) return;
     Object.keys(voteCounts).forEach((targetId) => {
       const badge = document.getElementById(`vote-count-${targetId}`);
-      if (badge) badge.innerText = `🗳️ ${voteCounts[targetId]}`;
+      if (badge) badge.innerText = `Голосов: ${voteCounts[targetId]}`;
     });
   },
 
   updateTimer(timeLeft) {
     const mins = Math.floor(timeLeft / 60).toString().padStart(2, "0");
     const secs = (timeLeft % 60).toString().padStart(2, "0");
-    document.getElementById("timer-text").innerText = `${mins}:${secs}`;
+    const timer = document.getElementById("timer-text");
+    if (timer) timer.innerText = `${mins}:${secs}`;
+    const box = document.getElementById("timer-box");
+    if (box) box.classList.toggle("timer-critical", timeLeft <= 10);
   },
 
   showPrivateModal(title, message) {
@@ -329,8 +367,8 @@ const UI = {
       ? "text-sm font-bold px-3 py-1.5 rounded-lg inline-block mx-auto bg-emerald-950 border border-emerald-500 text-emerald-300"
       : "text-sm font-bold px-3 py-1.5 rounded-lg inline-block mx-auto bg-red-950 border border-red-500 text-red-300";
     outcome.innerText = result.victory
-      ? "🎉 ПОБЕДА ВЫЖИВШИХ! (Бункер выжил)"
-      : "💥 ПОБЕДА САБОТАЖНИКА! (Бункер потерпел крах)";
+      ? "ВЫЖИВАНИЕ ПОДТВЕРЖДЕНО"
+      : "БУНКЕР ПОТЕРЯН";
     body.innerText = result.story || "Итоги подведены.";
     modal.classList.remove("hidden");
   },
