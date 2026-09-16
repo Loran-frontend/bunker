@@ -147,7 +147,14 @@ header {
 #bunker-capacity { color: #d6a34a !important; }
 
 /* Players: scan-friendly, action-ready */
-#players-list { padding-right: 2px; }
+#players-list {
+  min-height: 0;
+  padding-right: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
 #players-list > div {
   background: var(--bunker-surface) !important;
   border-color: var(--bunker-border) !important;
@@ -164,10 +171,15 @@ header {
 
 /* Chat/logs: tertiary, visually quieter */
 #game-logs {
+  min-height: 0;
   background: #0a0d0f !important;
   border-color: var(--bunker-border) !important;
   color: #889397 !important;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 #chat-input { background: #111517 !important; border: 0 !important; min-height: 38px; }
 #chat-send-btn { min-height: 38px; border-radius: 0 6px 6px 0 !important; }
@@ -179,12 +191,25 @@ header {
   border-radius: 10px !important;
   box-shadow: 0 24px 70px rgba(0,0,0,.55) !important;
 }
-#join-modal h1 { color: #e0a647 !important; }
+#action-target-list {
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
 #action-target-list button {
   background: #191e21 !important;
   border: 1px solid var(--bunker-border) !important;
 }
 #action-target-list button:hover { background: #27241d !important; border-color: #80602b !important; color: #f0c16d !important; }
+
+/* Modals with bounded dynamic content keep scrolling local to the content area. */
+#finale-body {
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
 
 /* Mobile is a different composition, not a shrunken desktop */
 @media (max-width: 767px) {
