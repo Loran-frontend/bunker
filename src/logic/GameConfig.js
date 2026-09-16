@@ -31,4 +31,7 @@ module.exports = {
   },
   relations: { allianceDurationRounds: 1, trustMin: -3, trustMax: 3 },
   states: { maxSeverity: 4 },
+  session: {
+    reconnectWindowMs: 120000,
+  },
 };
