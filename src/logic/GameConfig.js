@@ -11,6 +11,12 @@ module.exports = {
     electricityPerRound: 4,
     medicinePerTreatment: 1,
     criticalThreshold: 0.2,
+    professionProduction: {
+      farmerFood: 1,
+      guardWater: 1,
+      engineerElectricity: 1,
+      doctorMedicine: 1,
+    },
   },
   events: { enabled: true, severityScale: 1, maxSeverity: 3 },
   traitor: {
