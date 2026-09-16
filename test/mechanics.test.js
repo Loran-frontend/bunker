@@ -24,7 +24,8 @@ function makeGame() {
   assert.ok(own.personalGoal);
   assert.ok(other.personalGoal);
   assert.notStrictEqual(other.personalGoal.id, own.personalGoal.id);
-  assert.strictEqual(other.traitorActions, null);
+  const otherPlayer = game.players.get('p1');
+  assert.strictEqual(other.traitorActions !== null, otherPlayer.isTraitor);
 })();
 
 (function sabotageIsServerAuthoritative() {

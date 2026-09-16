@@ -7,7 +7,7 @@ module.exports = {
     electricityPerCapacity: 4,
     startingRatio: 0.9,
     foodPerPlayerRound: 0.65,
-    waterPerPlayerRound: 0.65,
+    waterPerPlayerRound: 0.6,
     electricityPerRound: 4,
     medicinePerTreatment: 1,
     criticalThreshold: 0.2,

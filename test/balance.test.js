@@ -59,7 +59,10 @@ function makeGame(count) {
   const game = makeGame(6);
   game.status = 'DISCUSSION';
   game.traitorId = 'p0';
+  game.players.get('p0').isTraitor = true;
   const state = game.getMechanics().traitorActions.get('p0');
+  state.remaining = 2;
+  state.lastRound = -99;
   assert.strictEqual(state.remaining, 2);
   assert.strictEqual(game.traitorSabotage('p0', 'sabotageElectricity').success, true);
   game.round += 1;
