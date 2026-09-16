@@ -4,7 +4,6 @@ module.exports = function installHostGameSettings(GameState) {
   if (GameState.prototype.__hostGameSettingsInstalled) return;
   GameState.prototype.__hostGameSettingsInstalled = true;
 
-  const originalUpdateSettings = GameState.prototype.updateSettings;
   const originalGetSanitizedState = GameState.prototype.getSanitizedState;
   const originalGetMechanics = GameState.prototype.getMechanics;
   const originalGetFinaleMechanics = GameState.prototype.getFinaleMechanics;
@@ -61,7 +60,6 @@ module.exports = function installHostGameSettings(GameState) {
 
       if (!config.additionalTasks) {
         this.game.players.forEach((player) => { delete player.personalGoal; delete player.personalGoalStatus; });
-        this.goalProgress = {};
       }
       if (!config.survivalStats) {
         this.resources = null;
