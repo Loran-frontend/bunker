@@ -4,16 +4,21 @@ document.addEventListener('DOMContentLoaded', () => {
   SocketHandler.initListeners();
 
   const nameInput=document.getElementById('player-name-input'), createRoomBtn=document.getElementById('create-room-btn'), roomCodeInput=document.getElementById('room-code-input'), joinRoomBtn=document.getElementById('join-room-btn'), joinModal=document.getElementById('join-modal');
+  const ROOM_CODE_PATTERN=/^[A-Z0-9]{5}$/;
   if (window.location.pathname === '/game' && joinModal) joinModal.classList.add('hidden');
-  createRoomBtn.addEventListener('click',()=>{const name=nameInput.value.trim();if(!name)return alert('Пожалуйста, введите никнейм');SocketHandler.createRoom(name);joinModal.classList.add('hidden');});
-  joinRoomBtn.addEventListener('click',()=>{const name=nameInput.value.trim(),code=roomCodeInput.value.trim();if(!name)return alert('Пожалуйста, введите никнейм');if(!code)return alert('Пожалуйста, введите код комнаты');SocketHandler.joinRoom(name,code);joinModal.classList.add('hidden');});
-  document.getElementById('traitor-toggle').addEventListener('change',(e)=>SocketHandler.updateSettings({traitorModeEnabled:e.target.checked}));
-  document.getElementById('host-start-btn').addEventListener('click',()=>SocketHandler.startGame()); document.getElementById('host-next-btn').addEventListener('click',()=>SocketHandler.nextPhase());
-  const chatInput=document.getElementById('chat-input'),chatSendBtn=document.getElementById('chat-send-btn'); const sendChat=()=>{const text=chatInput.value.trim();if(text){SocketHandler.sendChatMessage(text);chatInput.value='';}}; chatSendBtn.addEventListener('click',sendChat); chatInput.addEventListener('keypress',(e)=>{if(e.key==='Enter')sendChat();});
-  document.getElementById('action-modal-cancel').addEventListener('click',()=>document.getElementById('action-modal').classList.add('hidden')); document.getElementById('private-modal-close').addEventListener('click',()=>document.getElementById('private-modal').classList.add('hidden')); document.getElementById('finale-modal-close').addEventListener('click',()=>document.getElementById('finale-modal').classList.add('hidden'));
+  if(roomCodeInput)roomCodeInput.addEventListener('input',()=>{roomCodeInput.value=roomCodeInput.value.replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,5);});
+  createRoomBtn?.addEventListener('click',()=>{const name=nameInput.value.trim();if(!name)return alert('Пожалуйста, введите никнейм');SocketHandler.createRoom(name);joinModal.classList.add('hidden');});
+  joinRoomBtn?.addEventListener('click',()=>{const name=nameInput.value.trim(),code=(roomCodeInput.value||'').trim().toUpperCase();if(!name)return alert('Пожалуйста, введите никнейм');if(!ROOM_CODE_PATTERN.test(code)){alert('Код комнаты должен содержать ровно 5 символов: A-Z и 0-9.');return;}SocketHandler.joinRoom(name,code);joinModal.classList.add('hidden');});
+  document.getElementById('traitor-toggle')?.addEventListener('change',(e)=>SocketHandler.updateSettings({traitorModeEnabled:e.target.checked}));
+  document.getElementById('host-start-btn')?.addEventListener('click',()=>SocketHandler.startGame()); document.getElementById('host-next-btn')?.addEventListener('click',()=>SocketHandler.nextPhase());
+  const chatInput=document.getElementById('chat-input'),chatSendBtn=document.getElementById('chat-send-btn'); const sendChat=()=>{const text=chatInput.value.trim();if(text){SocketHandler.sendChatMessage(text);chatInput.value='';}}; chatSendBtn?.addEventListener('click',sendChat); chatInput?.addEventListener('keypress',(e)=>{if(e.key==='Enter')sendChat();});
+  document.getElementById('action-modal-cancel')?.addEventListener('click',()=>document.getElementById('action-modal').classList.add('hidden')); document.getElementById('private-modal-close')?.addEventListener('click',()=>document.getElementById('private-modal').classList.add('hidden')); document.getElementById('finale-modal-close')?.addEventListener('click',()=>document.getElementById('finale-modal').classList.add('hidden'));
 
+  const copyRoomCode=async()=>{const value=document.getElementById('room-code-value')?.textContent?.trim();const feedback=document.getElementById('copy-room-code-feedback');if(!value)return;try{if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);else{const area=document.createElement('textarea');area.value=value;area.setAttribute('readonly','');area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();document.execCommand('copy');area.remove();}if(feedback){feedback.classList.remove('hidden');feedback.classList.add('flex');window.clearTimeout(window.__roomCodeCopyTimer);window.__roomCodeCopyTimer=window.setTimeout(()=>{feedback.classList.add('hidden');feedback.classList.remove('flex');},1800);}}catch(_){if(feedback){feedback.textContent='Скопируйте код вручную';feedback.classList.remove('hidden');feedback.classList.add('flex');}}};
+  document.getElementById('copy-room-code-btn')?.addEventListener('click',copyRoomCode);
   const originalUpdate=UI.updateGameState.bind(UI);
-  UI.updateGameState=(state)=>{originalUpdate(state);renderMechanics(state);};
+  UI.updateGameState=(state)=>{originalUpdate(state);renderMechanics(state);renderRoomCode(state);};
+  function renderRoomCode(state){const card=document.getElementById('room-code-card'),value=document.getElementById('room-code-value');if(!card||!value)return;const code=typeof state?.roomId==='string'?state.roomId.toUpperCase():'';const visible=ROOM_CODE_PATTERN.test(code);value.textContent=visible?code:'';card.classList.toggle('hidden',!visible);}
   window.UI.showMechanicsNotice=(text)=>{UI.showPrivateModal('⚠️ Событие',text);};
 
   function ensurePanel(){

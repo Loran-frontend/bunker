@@ -16,46 +16,21 @@
         <p class="eyebrow">ПОСТАПОКАЛИПТИЧЕСКАЯ СОЦИАЛЬНАЯ ИГРА</p>
         <h1 id="start-title">BUNKER</h1>
         <p class="hero-copy">Шесть–шестнадцать выживших. Ограниченные ресурсы. Секреты, союзы и одно место в бункере.</p>
-        <div class="status-pill" id="connection-status" aria-live="polite">
-          <span class="status-dot"></span>
-          <span id="connection-status-text">Подключение…</span>
-        </div>
+        <div class="status-pill" id="connection-status" aria-live="polite"><span class="status-dot"></span><span id="connection-status-text">Подключение…</span></div>
       </section>
-
       <section class="entry-grid" aria-label="Вход в игру">
         <article class="entry-card entry-card-primary">
-          <div class="card-icon">+</div>
-          <div class="card-heading">
-            <span class="card-kicker">НОВАЯ ИГРА</span>
-            <h2>Создать игру</h2>
-          </div>
-          <p>Создайте комнату и поделитесь кодом с другими игроками.</p>
-          <form id="create-form" novalidate>
-            <label for="create-name">Имя игрока</label>
-            <input id="create-name" name="name" type="text" maxlength="32" autocomplete="nickname" placeholder="Например, Алекс" required>
-            <button id="create-button" class="cta cta-primary" type="submit">Создать игру <span aria-hidden="true">→</span></button>
-          </form>
+          <div class="card-icon">+</div><div class="card-heading"><span class="card-kicker">НОВАЯ ИГРА</span><h2>Создать игру</h2></div>
+          <p>Создайте комнату и поделитесь пятизначным кодом с другими игроками.</p>
+          <form id="create-form" novalidate><label for="create-name">Имя игрока</label><input id="create-name" name="name" type="text" maxlength="32" autocomplete="nickname" placeholder="Например, Алекс" required><button id="create-button" class="cta cta-primary" type="submit">Создать игру <span aria-hidden="true">→</span></button></form>
         </article>
-
         <div class="entry-divider" aria-hidden="true"><span>ИЛИ</span></div>
-
         <article class="entry-card">
-          <div class="card-icon">⌕</div>
-          <div class="card-heading">
-            <span class="card-kicker">УЖЕ ЕСТЬ КОД?</span>
-            <h2>Войти в игру</h2>
-          </div>
-          <p>Введите имя и код комнаты, чтобы присоединиться к выжившим.</p>
-          <form id="join-form" novalidate>
-            <label for="join-name">Имя игрока</label>
-            <input id="join-name" name="name" type="text" maxlength="32" autocomplete="nickname" placeholder="Например, Алекс" required>
-            <label for="room-code">Код комнаты</label>
-            <input id="room-code" name="roomId" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="BUNK-4021" required>
-            <button id="join-button" class="cta cta-secondary" type="submit">Войти в игру <span aria-hidden="true">→</span></button>
-          </form>
+          <div class="card-icon">⌕</div><div class="card-heading"><span class="card-kicker">УЖЕ ЕСТЬ КОД?</span><h2>Войти в игру</h2></div>
+          <p>Введите имя и пятизначный код комнаты, чтобы присоединиться к выжившим.</p>
+          <form id="join-form" novalidate><label for="join-name">Имя игрока</label><input id="join-name" name="name" type="text" maxlength="32" autocomplete="nickname" placeholder="Например, Алекс" required><label for="room-code">Код комнаты</label><input id="room-code" name="roomId" type="text" maxlength="5" minlength="5" pattern="[A-Za-z0-9]{5}" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="A7K2M" required><button id="join-button" class="cta cta-secondary" type="submit">Войти в игру <span aria-hidden="true">→</span></button></form>
         </article>
       </section>
-
       <p id="entry-error" class="entry-error" role="alert" aria-live="assertive"></p>
       <p class="footer-note">Вход не требует регистрации. Игровая сессия восстанавливается автоматически при переподключении.</p>
     </div>
