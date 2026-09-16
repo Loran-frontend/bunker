@@ -70,14 +70,14 @@ function makeGame(count) {
 (function traitorActionBudgetRegression() {
   const game = makeGame(6);
   game.status = 'DISCUSSION';
-  game.traitorId = 'p0';
-  const state = game.getMechanics().traitorActions.get('p0');
+  const traitorId = game.traitorId;
+  const state = game.getMechanics().traitorActions.get(traitorId);
   assert.strictEqual(state.remaining, 2);
-  assert.strictEqual(game.traitorSabotage('p0', 'sabotageElectricity').success, true);
+  assert.strictEqual(game.traitorSabotage(traitorId, 'sabotageElectricity').success, true);
   game.round += 1;
-  assert.strictEqual(game.traitorSabotage('p0', 'sabotageElectricity').success, true);
+  assert.strictEqual(game.traitorSabotage(traitorId, 'sabotageElectricity').success, true);
   game.round += 1;
-  assert.strictEqual(game.traitorSabotage('p0', 'sabotageElectricity').success, false);
+  assert.strictEqual(game.traitorSabotage(traitorId, 'sabotageElectricity').success, false);
 })();
 
 console.log('Balance tests passed.');
