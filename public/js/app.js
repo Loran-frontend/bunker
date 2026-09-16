@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   SocketHandler.initListeners();
 
   const nameInput=document.getElementById('player-name-input'), createRoomBtn=document.getElementById('create-room-btn'), roomCodeInput=document.getElementById('room-code-input'), joinRoomBtn=document.getElementById('join-room-btn'), joinModal=document.getElementById('join-modal');
+  if (window.location.pathname === '/game' && joinModal) joinModal.classList.add('hidden');
   createRoomBtn.addEventListener('click',()=>{const name=nameInput.value.trim();if(!name)return alert('Пожалуйста, введите никнейм');SocketHandler.createRoom(name);joinModal.classList.add('hidden');});
   joinRoomBtn.addEventListener('click',()=>{const name=nameInput.value.trim(),code=roomCodeInput.value.trim();if(!name)return alert('Пожалуйста, введите никнейм');if(!code)return alert('Пожалуйста, введите код комнаты');SocketHandler.joinRoom(name,code);joinModal.classList.add('hidden');});
   document.getElementById('traitor-toggle').addEventListener('change',(e)=>SocketHandler.updateSettings({traitorModeEnabled:e.target.checked}));
