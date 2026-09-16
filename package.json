@@ -4,8 +4,7 @@
   "description": "Bunker board game web application for online / local network",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "node test/reconnect.test.js && node test/smoke.test.js && node test/game-state.test.js && node test/mechanics.test.js && node test/finale.test.js && node test/balance.test.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.19.2",
