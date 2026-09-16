@@ -1,21 +1,27 @@
-const socket = io(window.BUNKER_SOCKET_URL || undefined, { transports: ["websocket", "polling"], reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 500, reconnectionDelayMax: 5000 });
+const SESSION_STORAGE_KEY = 'bunker.sessionId';
+const initialSessionId = (() => { try { return localStorage.getItem(SESSION_STORAGE_KEY) || null; } catch (_) { return null; } })();
+const socket = io(window.BUNKER_SOCKET_URL || undefined, { transports: ["websocket", "polling"], reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 500, reconnectionDelayMax: 5000, auth: { sessionId: initialSessionId } });
+let transportSocketId = socket.id;
+try { Object.defineProperty(socket, 'id', { configurable: true, get() { return window.BUNKER_PLAYER_ID || transportSocketId; }, set(value) { transportSocketId = value; } }); } catch (_) {}
+function setSession(sessionId, playerId) { try { if (sessionId) localStorage.setItem(SESSION_STORAGE_KEY, sessionId); else localStorage.removeItem(SESSION_STORAGE_KEY); } catch (_) {} socket.auth = { ...(socket.auth || {}), sessionId: sessionId || null }; if (playerId) window.BUNKER_PLAYER_ID = playerId; }
+function clearSession() { setSession(null, null); delete window.BUNKER_PLAYER_ID; }
 const SocketHandler = {
   createRoom(name){socket.emit('room:create',{name});}, joinRoom(name,roomId){socket.emit('room:join',{name,roomId});}, updateSettings(settings){socket.emit('room:settings',settings);}, sendChatMessage(text){socket.emit('chat:message',{text});}, startGame(){socket.emit('game:start');}, nextPhase(){socket.emit('game:next_phase');}, revealCard(category){socket.emit('card:reveal',{category});}, useCardAction(category,targetId){socket.emit('card:action',{category,targetId});}, castVote(targetId){socket.emit('vote:cast',{targetId});},
   createAlliance(targetId){socket.emit('alliance:create',{targetId});}, acceptAlliance(fromId){socket.emit('alliance:accept',{fromId});}, breakAlliance(allianceId){socket.emit('alliance:break',{allianceId});}, updateTrust(targetId,delta){socket.emit('trust:update',{targetId,delta});}, heal(targetId){socket.emit('state:heal',{targetId});}, sabotage(action){socket.emit('traitor:sabotage',{action});}, sendVoiceSignal(targetId,signal){socket.emit('voice:signal',{targetId,signal});}, sendVoiceSpeaking(isSpeaking){socket.emit('voice:speaking',{isSpeaking});},
   initListeners(){
-    socket.on('room:created',(data)=>UI.updateGameState(data.state)); socket.on('game:init',(state)=>UI.updateGameState(state)); socket.on('room:updated',(state)=>UI.updateGameState(state)); socket.on('timer:tick',(data)=>UI.updateTimer(data.timeLeft)); socket.on('vote:update',(data)=>UI.updateVoteCounts(data.voteCounts));
-    socket.on('action:private',(data)=>{
-      if(data?.title==='🤝 Предложение союза'){
-        const state=UI.currentState||null;
-        const match=String(data.message||'').match(/^(.+?) предлагает вам/);
-        const senderName=match?.[1];
-        const sender=senderName&&state?.players?.find(p=>p.name===senderName);
-        if(sender&&confirm(`${data.message}\n\nПринять союз?`)) SocketHandler.acceptAlliance(sender.id);
-        else UI.showPrivateModal(data.title,data.message);
-        return;
-      }
-      UI.showPrivateModal(data.title,data.message);
-    });
+    socket.on('connect',()=>UI.setConnectionStatus?.(initialSessionId || window.BUNKER_PLAYER_ID ? 'reconnecting' : 'connected'));
+    socket.on('reconnect_attempt',()=>UI.setConnectionStatus?.('reconnecting'));
+    socket.on('disconnect',()=>UI.setConnectionStatus?.('reconnecting'));
+    socket.on('connect_error',()=>UI.setConnectionStatus?.('reconnecting'));
+    socket.on('session:issued',(data)=>{setSession(data?.sessionId,data?.playerId);UI.setConnectionStatus?.('connected');});
+    socket.on('session:restored',(data)=>{setSession(socket.auth?.sessionId,data?.playerId);UI.updateGameState(data.state);UI.setConnectionStatus?.('restored');});
+    socket.on('session:expired',(data)=>{clearSession();UI.setConnectionStatus?.('expired');UI.showPrivateModal?.('Сессия завершена',data?.message||'Игровая сессия больше недоступна.');});
+    socket.on('room:created',(data)=>{if(data?.state?.players?.length){const me=data.state.players.find(p=>p.id===data.state.hostId)||data.state.players[0];if(me)window.BUNKER_PLAYER_ID=me.id;}UI.updateGameState(data.state);});
+    socket.on('game:init',(state)=>{if(state?.players?.length){const current=state.players.find(p=>p.id===window.BUNKER_PLAYER_ID);if(current)window.BUNKER_PLAYER_ID=current.id;else if(state.players.length===1)window.BUNKER_PLAYER_ID=state.players[0].id;}UI.updateGameState(state);});
+    socket.on('room:updated',(state)=>{const current=state?.players?.find(p=>p.id===window.BUNKER_PLAYER_ID);if(current)window.BUNKER_PLAYER_ID=current.id;UI.updateGameState(state);});
+    socket.on('player:presence',(data)=>{if(UI.currentState?.players){const player=UI.currentState.players.find(p=>p.id===data?.playerId);if(player)player.connected=data.connected;UI.renderPlayersList?.(UI.currentState.players,UI.currentState.players.find(p=>p.id===window.BUNKER_PLAYER_ID),UI.currentState);}});
+    socket.on('timer:tick',(data)=>UI.updateTimer(data.timeLeft)); socket.on('vote:update',(data)=>UI.updateVoteCounts(data.voteCounts));
+    socket.on('action:private',(data)=>{if(data?.title==='🤝 Предложение союза'){const state=UI.currentState||null;const match=String(data.message||'').match(/^(.+?) предлагает вам/);const senderName=match?.[1];const sender=senderName&&state?.players?.find(p=>p.name===senderName);if(sender&&confirm(`${data.message}\n\nПринять союз?`)) SocketHandler.acceptAlliance(sender.id);else UI.showPrivateModal(data.title,data.message);return;}UI.showPrivateModal(data.title,data.message);});
     socket.on('log:new',(m)=>UI.appendLog(m)); socket.on('game:sabotage',(data)=>UI.showMechanicsNotice?.(`⚠️ Саботаж: ${data.action}`));
     socket.on('voice:signal',(data)=>{if(window.VoiceChat)window.VoiceChat.handleSignal(data.senderId,data.signal);}); socket.on('voice:speaking_update',(data)=>UI.updateSpeakingStatus(data.playerId,data.isSpeaking)); socket.on('game:finale',(result)=>UI.showFinaleModal(result)); socket.on('error:msg',(msg)=>alert(msg));
   }
