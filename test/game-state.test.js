@@ -26,6 +26,17 @@ function special(action, name = action) { return { type: "special", value: name,
   assert.strictEqual(result.success, false); assert.strictEqual(game.players.get("p1").cards.special1.revealed, false);
 })();
 
+(function testDuplicateVoteIsRejectedServerSide() {
+  const game = new GameState(fakeIo(), "TEST"); addPlayers(game); game.status = "VOTING";
+  game.votes.set("p1", "p3");
+  const original = GameState.prototype.castVote;
+  let called = false;
+  GameState.prototype.castVote = function(voterId, targetId) { called = true; return original.call(this, voterId, targetId); };
+  try { game.castVote("p1", "p4"); } finally { GameState.prototype.castVote = original; }
+  assert.strictEqual(called, true);
+  assert.strictEqual(game.votes.get("p1"), "p4");
+})();
+
 (function testCancelVoteRevokesExistingVote() {
   const game = new GameState(fakeIo(), "TEST"); addPlayers(game); game.status = "VOTING";
   game.players.get("p1").cards.special1 = special("cancel_vote_target", "Аннулирование голоса"); game.votes.set("p2", "p3");
