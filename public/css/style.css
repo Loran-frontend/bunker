@@ -1,31 +1,23 @@
-/* Custom styling for dark post-apocalyptic bunker interface */
-body {
-  user-select: none;
-  touch-action: manipulation;
-}
-
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #0f172a;
-}
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
-}
-
-.mobile-nav-btn.active {
-  color: #f59e0b;
-}
-
-.card-item {
-  transition: transform 0.15s ease, border-color 0.15s ease;
-}
-.card-item:hover {
-  transform: translateY(-2px);
-}
+/* BUNKER UI SYSTEM */
+:root{--bg:#090b0d;--surface:#111518;--surface2:#171c20;--line:#293138;--line2:#3a444c;--text:#e5e7e9;--muted:#8d979f;--accent:#d69a32;--success:#5c9b72;--danger:#b85c5c}
+html,body{min-height:100%}body{user-select:none;touch-action:manipulation;background:var(--bg)!important;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.005em}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.022;background-image:linear-gradient(rgba(255,255,255,.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.8) 1px,transparent 1px);background-size:32px 32px;z-index:0}body>*{position:relative;z-index:1}
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:#0c0f11}::-webkit-scrollbar-thumb{background:#30383e;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#414c54}
+header{background:rgba(9,11,13,.97)!important;border-color:var(--line)!important;height:62px!important;min-height:62px;padding:10px 18px!important}header h1{color:#d9dde0!important;letter-spacing:.18em!important}header .text-2xl{filter:grayscale(.7);opacity:.75}
+#phase-badge{background:var(--surface2)!important;border:1px solid var(--line)!important;color:#c9d0d4!important;border-radius:6px!important;padding:5px 9px!important;letter-spacing:.04em}#room-code-badge{background:#14191d!important;border-color:var(--line2)!important;color:#aeb7bd!important}#timer-box{background:#15191c!important;border-color:#514021!important;color:#e0aa4c!important;border-radius:6px!important}#voice-controls{background:#121619!important;border-color:var(--line)!important}#voice-mute-btn,#voice-deafen-btn{background:transparent!important;border:0!important;color:#9eafa6!important}
+button{border-radius:6px!important;transition:background-color .15s ease,border-color .15s ease,color .15s ease,transform .15s ease!important}button:focus-visible,input:focus-visible{outline:2px solid #c7923c!important;outline-offset:2px}button:disabled{opacity:.45!important;cursor:not-allowed!important;transform:none!important}#host-start-btn,#host-next-btn{box-shadow:none!important}
+main{background:#0b0e10;gap:0}#tab-my-cards{background:#0d1012;border-color:var(--line)!important;padding:18px!important}#tab-bunker{width:340px!important;background:#101417!important;border-color:var(--line)!important;padding:14px!important}#tab-players{width:310px!important;background:#0e1214;padding:14px!important}
+#tab-my-cards>h2,#tab-players>h2{color:#d6dadd!important;font-size:13px!important;letter-spacing:.08em;text-transform:uppercase}#tab-my-cards>h2 span:first-child,#tab-players>h2 span:first-child{color:#d6dadd!important}#my-status-tag{color:#778189!important;letter-spacing:normal;text-transform:none}
+#turn-banner{background:#1b1710!important;border:1px solid #6b5128!important;color:#e1b260!important;padding:12px 14px!important;border-radius:7px!important;box-shadow:none!important}#turn-banner-timer{color:#d6a24d!important}
+#host-settings-panel,#traitor-banner{border-radius:7px!important;box-shadow:none!important}#host-settings-panel{background:#15191c!important;border-color:#544225!important}#traitor-banner{background:#201516!important;border-color:#633234!important}
+#my-cards-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:10px!important}.card-item{min-height:150px;background:#111518!important;border:1px solid #293138!important;border-radius:8px!important;padding:13px!important;box-shadow:inset 0 1px rgba(255,255,255,.02)}.card-item:hover{transform:translateY(-1px);border-color:#4a555d!important}.card-item .text-\[10px\]{color:#7f8991!important}.card-item .text-amber-400{color:#d5a04b!important}.card-item button{min-height:34px;background:#8e6525!important;color:#f6ead4!important;border:1px solid #b28237!important;animation:none!important}.card-item button:hover{background:#a9782d!important}.card-item button.bg-purple-700{background:#4d405f!important;border-color:#6d5b80!important}.card-item .text-purple-400{color:#aa9ab9!important}
+#tab-bunker h3{color:#aab3b9!important;font-size:11px!important;letter-spacing:.1em}#disaster-card,#bunker-card,#mechanics-panel,#game-logs{background:#12171a!important;border-color:var(--line)!important;border-radius:7px!important}#disaster-card{border-left:3px solid #855252!important}#bunker-card{border-left:3px solid #557d63!important}#disaster-title{color:#c47a7a!important}#bunker-title{color:#82ae91!important}#bunker-capacity{color:#d0a04e!important}
+#mechanics-panel{padding:11px!important}#mechanics-panel>div{border-color:#30383e!important}#resource-bars>div{background:#0d1113!important;border-color:#252d32!important;border-radius:6px!important}#resource-bars .bg-amber-500{background:#9d742e!important}#event-box{background:#1b1415!important;border-color:#64393b!important}#goal-box{background:#15131a!important;border-color:#51475d!important}#alliance-box{background:#12171a!important;border-color:#3d505e!important}#traitor-actions{background:#1a1314!important;border-color:#66383a!important}
+#players-list{padding-right:2px}#players-list>div{background:#12171a!important;border:1px solid #293138!important;border-radius:7px!important;padding:10px!important}#players-list>div:hover{border-color:#424c53!important}#players-list>div .border-t{border-color:#283036!important}#players-list .bg-amber-950\/20{background:#191610!important;border-color:#725525!important}#players-list .bg-red-950\/20{background:#1a1314!important}#players-list button{min-height:30px}
+#game-logs{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px!important;line-height:1.45}#chat-input{background:#0d1113!important;border:0!important;min-height:38px}#chat-send-btn{min-width:82px;background:#8e6525!important;color:#f6ead4!important}
+#join-modal,#action-modal,#private-modal,#finale-modal{backdrop-filter:blur(4px);background:rgba(4,6,7,.84)!important}#join-modal>div,#action-modal>div,#private-modal>div,#finale-modal>div{background:#12171a!important;border:1px solid #39434a!important;border-radius:9px!important;box-shadow:0 18px 55px rgba(0,0,0,.45)!important}#join-modal>div{max-width:440px}#join-modal h1{color:#d6a04a!important}#join-modal input{background:#0b0f11!important;border-color:#303940!important}#join-modal button,#private-modal-close,#finale-modal-close{background:#8e6525!important;color:#f6ead4!important;box-shadow:none!important}
+.timer-critical{border-color:#854747!important;color:#dc7777!important}
+@media(max-width:767px){body{overflow:hidden}header{height:58px!important;min-height:58px;padding:8px 10px!important}header h1,#room-code-badge{display:none!important}#voice-mute-btn,#voice-deafen-btn{font-size:0!important;width:34px;height:34px}#timer-box{font-size:13px!important;padding:7px 9px!important}#host-start-btn,#host-next-btn{font-size:10px!important;padding:7px 9px!important}main{min-height:0}.tab-content{min-width:0}#tab-my-cards,#tab-bunker,#tab-players{width:100%!important;border:0!important;padding:12px!important}#tab-my-cards{overflow-y:auto!important}#my-cards-grid{grid-template-columns:1fr 1fr!important;gap:8px!important}.card-item{min-height:138px;padding:11px!important}#tab-bunker,#tab-players{overflow-y:auto!important}.mobile-nav-btn{border-radius:5px!important}nav{background:#0a0d0f!important;border-color:var(--line)!important;height:62px!important;padding:5px!important}.mobile-nav-btn span:first-child{font-size:15px!important;filter:grayscale(.8)}.mobile-nav-btn.active{background:#1a1711!important;color:#d6a04a!important}.mobile-nav-btn.active span:first-child{filter:none}#action-modal>div,#private-modal>div,#finale-modal>div{max-height:calc(100dvh - 24px)}#finale-body{max-height:none!important}}
+@media(min-width:768px) and (max-width:1100px){#tab-bunker{width:285px!important}#tab-players{width:260px!important}#my-cards-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:1101px) and (max-width:1350px){#tab-bunker{width:310px!important}#tab-players{width:280px!important}#my-cards-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}}
