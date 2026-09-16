@@ -29,7 +29,7 @@
             <span class="card-kicker">НОВАЯ ИГРА</span>
             <h2>Создать игру</h2>
           </div>
-          <p>Создайте комнату и поделитесь кодом с другими игроками.</p>
+          <p>Создайте комнату и поделитесь 5-символьным кодом с другими игроками.</p>
           <form id="create-form" novalidate>
             <label for="create-name">Имя игрока</label>
             <input id="create-name" name="name" type="text" maxlength="32" autocomplete="nickname" placeholder="Например, Алекс" required>
@@ -45,12 +45,12 @@
             <span class="card-kicker">УЖЕ ЕСТЬ КОД?</span>
             <h2>Войти в игру</h2>
           </div>
-          <p>Введите имя и код комнаты, чтобы присоединиться к выжившим.</p>
+          <p>Введите имя и 5-символьный код комнаты, чтобы присоединиться к выжившим.</p>
           <form id="join-form" novalidate>
             <label for="join-name">Имя игрока</label>
             <input id="join-name" name="name" type="text" maxlength="32" autocomplete="nickname" placeholder="Например, Алекс" required>
             <label for="room-code">Код комнаты</label>
-            <input id="room-code" name="roomId" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="BUNK-4021" required>
+            <input id="room-code" name="roomId" type="text" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="[A-Za-z0-9]{5}" placeholder="A7K2M" required>
             <button id="join-button" class="cta cta-secondary" type="submit">Войти в игру <span aria-hidden="true">→</span></button>
           </form>
         </article>
