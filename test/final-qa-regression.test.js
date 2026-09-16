@@ -51,7 +51,7 @@ function addPlayers(game, count = 6) {
     const result = game.startGame('p1');
     assert.strictEqual(result.success, true);
     assert.strictEqual(cleared, true);
-    assert.strictEqual(game.timer, 'stale-timer');
+    assert.strictEqual(game.timer, null);
     assert.strictEqual(game.status, 'REVEAL');
   } finally {
     global.clearInterval = originalClearInterval;
