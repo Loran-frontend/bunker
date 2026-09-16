@@ -1,11 +1,13 @@
 const GameState = require('./GameState');
 const { installGameMechanics } = require('./GameMechanics');
 const hardenGameState = require('./GameStateHardening');
+const installPlaytestHardening = require('./PlaytestHardening');
 
 // Install the gameplay expansion in the production server before security hardening
 // so every RoomManager-created GameState uses the same mechanics as the tests.
 installGameMechanics(GameState);
 hardenGameState(GameState);
+installPlaytestHardening(GameState);
 
 class RoomManager {
   constructor(io) {
