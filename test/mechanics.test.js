@@ -29,6 +29,7 @@ function makeGame() {
 
 (function sabotageIsServerAuthoritative() {
   const game = makeGame();
+  game.status = 'DISCUSSION';
   game.traitorId = 'p0';
   game.getMechanics().traitorActions.get('p0').remaining = 1;
   const before = game.getMechanics().resources.electricity;
@@ -40,6 +41,7 @@ function makeGame() {
 
 (function allianceSecurity() {
   const game = makeGame();
+  game.status = 'DISCUSSION';
   assert.strictEqual(game.proposeAlliance('p0', 'p1').success, true);
   assert.strictEqual(game.acceptAlliance('p1', 'p0').success, true);
   assert.strictEqual(game.getMechanics().publicAlliances().length, 1);
@@ -52,6 +54,7 @@ function makeGame() {
   const result = game.getMechanics().evaluateFinale(survivors);
   assert.ok(['success', 'consequences', 'failure', 'traitor'].includes(result.outcome));
   assert.ok(result.finalEvent && result.finalEvent.title);
+  assert.ok(result.resourceRatios);
 })();
 
 console.log('Mechanics tests passed.');
