@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/smoke.test.js && node test/game-state.test.js && node test/mechanics.test.js && node test/finale.test.js && node test/balance.test.js && node test/reconnect.test.js"
+    "test": "node test/reconnect.test.js && node test/smoke.test.js && node test/game-state.test.js && node test/mechanics.test.js && node test/finale.test.js && node test/balance.test.js"
   },
   "dependencies": {
     "express": "^4.19.2",
